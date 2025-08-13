@@ -121,6 +121,35 @@ module top_modbus_converter_tb;
     if (PSLVERR !== 1'b0) begin $display("ERROR: PSLVERR asserted"); $finish; end
 
     $display("All tests passed");
+
+    // --- Write and read back DO register ---
+    apb_write(12'h000, 32'hDEADBEEF);
+    apb_read(12'h000, rddata);
+    if (rddata !== 32'hDEADBEEF) begin
+      $display("ERROR: DO readback %h", rddata);
+      $finish;
+    end
+
+    // --- Drive GPIO_DI and read DI register ---
+    GPIO_DI = 32'hA5A55A5A;
+    repeat (5) @(posedge PCLK);
+    apb_read(12'h004, rddata);
+    if (rddata !== 32'hA5A55A5A) begin
+      $display("ERROR: DI read %h", rddata);
+      $finish;
+    end
+
+    // --- Check timer increment ---
+    apb_read(12'h008, rddata);
+    repeat (10) @(posedge PCLK);
+    apb_read(12'h008, rddata2);
+    if (rddata2 <= rddata) begin
+      $display("ERROR: timer did not increment (%h -> %h)", rddata, rddata2);
+      $finish;
+    end
+
+    $display("Testbench completed");
+
     #20 $finish;
   end
 
@@ -160,6 +189,7 @@ module top_modbus_converter_tb;
   end
   endtask
 
+
   // APB read task
   task apb_read(input [11:0] addr, output [31:0] data);
   begin
@@ -177,3 +207,4 @@ module top_modbus_converter_tb;
   end
   endtask
 endmodule
+
