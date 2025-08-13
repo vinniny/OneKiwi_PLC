@@ -1,0 +1,38 @@
+GowinSynthesis start
+Running parser ...
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\csr_block.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_rx.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_tx.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\crc16_modbus.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\lrc_ascii.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_bridge.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\gpio_input.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\gpio_output.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v'
+Analyzing Verilog file 'C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\top_modbus_converter.v'
+Compiling module 'top_modbus_converter'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\top_modbus_converter.v":2)
+Compiling module 'csr_block'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\csr_block.v":34)
+Compiling module 'gpio_input'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\gpio_input.v":2)
+Compiling module 'gpio_output'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\gpio_output.v":2)
+Compiling module 'uart_bridge'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_bridge.v":5)
+Compiling module 'uart_rx'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_rx.v":2)
+WARN  (EX3791) : Expression size 32 truncated to fit in target size 4("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_rx.v":50)
+WARN  (EX3791) : Expression size 32 truncated to fit in target size 4("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_rx.v":62)
+WARN  (EX3791) : Expression size 32 truncated to fit in target size 4("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_rx.v":69)
+WARN  (EX3791) : Expression size 32 truncated to fit in target size 4("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_rx.v":77)
+Compiling module 'uart_tx'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_tx.v":2)
+WARN  (EX3791) : Expression size 32 truncated to fit in target size 4("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_tx.v":42)
+WARN  (EX3791) : Expression size 32 truncated to fit in target size 4("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_tx.v":53)
+WARN  (EX3791) : Expression size 32 truncated to fit in target size 4("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_tx.v":57)
+WARN  (EX3791) : Expression size 32 truncated to fit in target size 4("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_tx.v":64)
+Compiling module 'modbus_controller'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v":6)
+Extracting RAM for identifier 'reg_holding'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v":56)
+Extracting RAM for identifier 'reg_input'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v":57)
+Extracting RAM for identifier 'tx_buf'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v":65)
+Extracting RAM for identifier 'bin'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v":73)
+Compiling module 'crc16_modbus'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\crc16_modbus.v":2)
+Compiling module 'lrc_ascii'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\lrc_ascii.v":2)
+ERROR (EX3784) : Index 256 is out of range [0:255] for 'rx_buf'("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v":106)
+WARN  (EX2933) : Function 'crc16_sw' has no return value assignment("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v":101)
+Module 'modbus_controller' remains a black box due to errors in its contents("C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v":6)
+GowinSynthesis finish

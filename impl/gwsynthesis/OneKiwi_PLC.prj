@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE gowin-synthesis-project>
+<Project>
+    <Version>beta</Version>
+    <Device id="GW1N-4D" package="LQFP100" speed="6" partNumber="GW1N-LV4LQ100C6/I5"/>
+    <FileList>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\csr_block.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_rx.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_tx.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\crc16_modbus.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\lrc_ascii.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\uart_bridge.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\gpio_input.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\gpio_output.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\modbus_controller.v" type="verilog"/>
+        <File path="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\src\top_modbus_converter.v" type="verilog"/>
+    </FileList>
+    <OptionList>
+        <Option type="disable_insert_pad" value="0"/>
+        <Option type="global_freq" value="50.000"/>
+        <Option type="looplimit" value="2000"/>
+        <Option type="output_file" value="C:\Gowin\Gowin_V1.9.11.02_x64\IDE\bin\Test Project\OneKiwi_PLC\impl\gwsynthesis\OneKiwi_PLC.vg"/>
+        <Option type="print_all_synthesis_warning" value="0"/>
+        <Option type="ram_rw_check" value="0"/>
+        <Option type="vcc" value="1.2"/>
+        <Option type="verilog_language" value="verilog-2001"/>
+        <Option type="vhdl_language" value="vhdl-1993"/>
+    </OptionList>
+</Project>
