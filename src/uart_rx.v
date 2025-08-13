@@ -1,6 +1,6 @@
 // uart_rx.v - 16x oversampling UART receiver, 8 data bits, optional parity, 1/2 stop
 module uart_rx #(
-  parameter OVERSAMPLE = 16
+  parameter [7:0] OVERSAMPLE = 8'd16
 )(
   input  wire        clk,
   input  wire        rst,
@@ -17,7 +17,7 @@ module uart_rx #(
   reg [2:0]  st;
   reg [15:0] div;
   reg        tick;
-  reg [3:0]  os;
+  reg [7:0]  os;
   reg [2:0]  bitn;
   reg [7:0]  sh;
   reg        par_acc;
@@ -33,48 +33,48 @@ module uart_rx #(
 
   always @(posedge clk) begin
     if (rst) begin
-      st<=S_IDLE; os<=0; bitn<=0; sh<=0; par_acc<=0;
-      valid_o<=0; framing_err<=0; parity_err<=0;
+      st<=S_IDLE; os<=8'd0; bitn<=3'd0; sh<=8'd0; par_acc<=1'b0;
+      valid_o<=1'b0; framing_err<=1'b0; parity_err<=1'b0;
     end else begin
       valid_o<=1'b0;
       if (tick) begin
         case (st)
           S_IDLE: begin
             framing_err<=1'b0; parity_err<=1'b0; par_acc<=1'b0;
-            if (~rx_i) begin st<=S_START; os<=OVERSAMPLE/2; end
+            if (~rx_i) begin st<=S_START; os<=OVERSAMPLE>>1; end
           end
           S_START: begin
-            if (os==0) begin
-              if (~rx_i) begin st<=S_DATA; os<=OVERSAMPLE-1; bitn<=3'd0; end
+            if (os==8'd0) begin
+              if (~rx_i) begin st<=S_DATA; os<=OVERSAMPLE-8'd1; bitn<=3'd0; end
               else st<=S_IDLE;
-            end else os<=os-1;
+            end else os<=os-8'd1;
           end
           S_DATA: begin
-            if (os==0) begin
+            if (os==8'd0) begin
               sh <= {rx_i, sh[7:1]};
               par_acc <= par_acc ^ rx_i;
-              os<=OVERSAMPLE-1;
+              os<=OVERSAMPLE-8'd1;
               if (bitn==3'd7) begin
                 if (parity==2'd0) st<=S_STOP;
                 else st<=S_PAR;
               end
               bitn<=bitn+3'd1;
-            end else os<=os-1;
+            end else os<=os-8'd1;
           end
           S_PAR: begin
-            if (os==0) begin
+            if (os==8'd0) begin
               if (parity==2'd1) parity_err <= (par_acc != rx_i);
               else if (parity==2'd2) parity_err <= (par_acc == rx_i);
-              st<=S_STOP; os<=OVERSAMPLE-1;
-            end else os<=os-1;
+              st<=S_STOP; os<=OVERSAMPLE-8'd1;
+            end else os<=os-8'd1;
           end
           S_STOP: begin
-            if (os==0) begin
+            if (os==8'd0) begin
               if (~rx_i) framing_err<=1'b1;
               data_o<=sh; valid_o<=1'b1;
-              if (stop2) begin os<=OVERSAMPLE-1; st<=S_IDLE; end
+              if (stop2) begin os<=OVERSAMPLE-8'd1; st<=S_IDLE; end
               else st<=S_IDLE;
-            end else os<=os-1;
+            end else os<=os-8'd1;
           end
         endcase
       end

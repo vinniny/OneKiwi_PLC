@@ -189,7 +189,6 @@ module top_modbus_converter_tb;
   end
   endtask
 
-
   // APB read task
   task apb_read(input [11:0] addr, output [31:0] data);
   begin
