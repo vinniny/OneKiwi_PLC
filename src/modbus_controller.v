@@ -99,14 +99,16 @@ module modbus_controller #(
 
   // ----- helper functions -----
   function [15:0] crc16_sw;
-    input integer n; integer i0,j0; reg [15:0] c0; reg [7:0] d0;
+    input integer n;
+    integer i0,j0; reg [15:0] c0; reg [7:0] d0;
     begin
-      c0 = 16'hFFFF;
+      c0        = 16'hFFFF;
+      crc16_sw  = 16'h0000;
       for (i0=0;i0<n;i0=i0+1) begin
-        d0=rx_buf[i0];
+        d0 = rx_buf[i0];
         for (j0=0;j0<8;j0=j0+1) begin
           if (((c0^d0) & 16'h0001)!=16'h0000) c0=(c0>>1)^16'hA001; else c0=(c0>>1);
-          d0=d0>>1;
+          d0 = d0 >> 1;
         end
       end
       crc16_sw = c0;
@@ -158,7 +160,9 @@ module modbus_controller #(
         S_COLLECT: begin
           if (rx_b_v) begin
             rx_buf[rx_len] <= rx_b;
-            rx_len <= rx_len + 8'd1;
+            if (rx_len != 8'hFF) begin
+              rx_len <= rx_len + 8'd1;
+            end
           end
           if (frame_end) begin
             st <= S_PARSE;
