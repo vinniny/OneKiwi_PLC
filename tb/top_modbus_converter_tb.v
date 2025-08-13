@@ -71,28 +71,28 @@ module top_modbus_converter_tb;
     // --- Write and read back DO register ---
     apb_write(12'h000, 32'hDEADBEEF);
     apb_read(12'h000, rddata);
-    if (rddata !== 32'hDEADBEEF)
+    if (rddata !== 32'hDEADBEEF) begin
       $display("ERROR: DO readback %h", rddata);
-    else
-      $display("DO readback OK: %h", rddata);
+      $finish;
+    end
 
     // --- Drive GPIO_DI and read DI register ---
     GPIO_DI = 32'hA5A55A5A;
     repeat (5) @(posedge PCLK);
     apb_read(12'h004, rddata);
-    if (rddata !== 32'hA5A55A5A)
+    if (rddata !== 32'hA5A55A5A) begin
       $display("ERROR: DI read %h", rddata);
-    else
-      $display("DI read OK: %h", rddata);
+      $finish;
+    end
 
     // --- Check timer increment ---
     apb_read(12'h008, rddata);
     repeat (10) @(posedge PCLK);
     apb_read(12'h008, rddata2);
-    if (rddata2 <= rddata)
+    if (rddata2 <= rddata) begin
       $display("ERROR: timer did not increment (%h -> %h)", rddata, rddata2);
-    else
-      $display("Timer increment OK: %h -> %h", rddata, rddata2);
+      $finish;
+    end
 
     $display("Testbench completed");
     #20 $finish;
