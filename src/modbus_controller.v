@@ -114,12 +114,14 @@ module modbus_controller #(
     end
   endfunction
 
-  function [7:0] hex2nib; input [7:0] c_in;
+  function [7:0] hex2nib;
+    input [7:0] c_in;
     begin
-      if (c_in>="0" && c_in<="9") hex2nib=c_in-"0";
-      else if (c_in>="A" && c_in<="F") hex2nib=c_in-"A"+8'd10;
-      else if (c_in>="a" && c_in<="f") hex2nib=c_in-"a"+8'd10;
-      else hex2nib=8'hFF;
+      // Default to 0xFF for invalid characters
+      hex2nib = 8'hFF;
+      if      (c_in >= "0" && c_in <= "9") hex2nib = c_in - "0";
+      else if (c_in >= "A" && c_in <= "F") hex2nib = c_in - "A" + 8'd10;
+      else if (c_in >= "a" && c_in <= "f") hex2nib = c_in - "a" + 8'd10;
     end
   endfunction
 
@@ -201,15 +203,17 @@ module modbus_controller #(
             ascii_err = 1'b0;
 
             // Expect rx_buf[0] = ':' ; data from [1 .. rx_len-3], LRC at last byte before CRLF
-            for (i=1; (i+1) < (rx_len-2); i=i+2) begin
-              nb0 = hex2nib(rx_buf[i]);
-              nb1 = hex2nib(rx_buf[i+1]);
-              if (nb0==8'hFF || nb1==8'hFF) begin
-                ascii_err = 1'b1;
-              end else begin
-                b = {nb0, nb1};
-                bin[blen] = b;
-                blen = blen + 1;
+            for (i=1; i<253; i=i+2) begin
+              if ((i+1) < (rx_len-2)) begin
+                nb0 = hex2nib(rx_buf[i[7:0]]);
+                nb1 = hex2nib(rx_buf[(i+1) & 8'hFF]);
+                if (nb0==8'hFF || nb1==8'hFF) begin
+                  ascii_err = 1'b1;
+                end else begin
+                  b = {nb0[3:0], nb1[3:0]};
+                  bin[blen[7:0]] = b;
+                  blen = blen + 1;
+                end
               end
             end
 
@@ -218,15 +222,15 @@ module modbus_controller #(
               st <= S_IDLE;
             end else begin
               // copy into rx_buf (binary)
-              for (k=0; k<blen; k=k+1) begin
-                rx_buf[k] = bin[k];
+              for (k=0; k<256; k=k+1) begin
+                if (k < blen) rx_buf[k[7:0]] = bin[k[7:0]];
               end
-              rx_len = blen;
+              rx_len = blen[7:0];
 
               // verify LRC: sum of bytes including address..data..LRC == 0
               sum = 8'h00;
-              for (k=0; k<blen; k=k+1) begin
-                sum = sum + rx_buf[k];
+              for (k=0; k<256; k=k+1) begin
+                if (k < blen) sum = sum + rx_buf[k[7:0]];
               end
 
               if (sum != 8'h00) begin
