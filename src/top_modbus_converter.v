@@ -27,9 +27,12 @@ module top_modbus_converter #(
 );
   // sync reset
   reg [1:0] rff;
-  always @(posedge PCLK or negedge PRESETn) begin
-    if (!PRESETn) rff<=2'b00; else rff<={rff[0],1'b1};
-  end
+    always @(posedge PCLK or negedge PRESETn) begin
+      if (!PRESETn)
+        rff <= 2'b00;
+      else
+        rff <= {rff[0],1'b1};
+    end
   wire rst = ~rff[1];
 
   // Wires between blocks
@@ -100,7 +103,9 @@ module top_modbus_converter #(
 
   gpio_input  u_gpio_in(.clk(PCLK), .rst(rst), .gpio_i(GPIO_DI), .di_status(di_status));
 
-  wire [31:0] do_wdata, do_wmask; wire do_we;
+    wire [31:0] do_wdata;
+    wire [31:0] do_wmask;
+    wire        do_we;
   gpio_output u_gpio_out(.clk(PCLK), .rst(rst), .do_wdata(do_wdata), .do_wmask(do_wmask), .do_we(do_we), .gpio_o(GPIO_DO));
 
   // UART bridge

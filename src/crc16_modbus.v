@@ -10,8 +10,10 @@ module crc16_modbus(
   reg [15:0] c;
   /* verilator lint_off BLKSEQ */
   function [15:0] step;
-    input [15:0] cin; input [7:0] d;
-    integer i; reg [15:0] x;
+    input [15:0] cin;
+    input [7:0]  d;
+    integer i;
+    reg [15:0] x;
     begin
       // Extend incoming byte to 16 bits before XOR to avoid width mismatch
       x = cin ^ {8'h00, d};

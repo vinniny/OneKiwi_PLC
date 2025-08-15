@@ -47,7 +47,9 @@ module uart_bridge #(
   uart_rx u_rx(.clk(clk), .rst(rst), .rx_i(uart_rx_i),
                .baud_div(baud_div), .parity(parity), .stop2(stop2),
                .data_o(rxd), .valid_o(rxv), .framing_err(ferr), .parity_err(perr));
-  reg  [7:0] txd; reg txv; wire txr;
+  reg  [7:0] txd;
+  reg        txv;
+  wire       txr;
   uart_tx u_tx(.clk(clk), .rst(rst), .baud_div(baud_div),
                .data_i(txd), .valid_i(txv), .ready_o(txr),
                .parity(parity), .stop2(stop2), .tx_o(uart_tx_o));
@@ -55,10 +57,15 @@ module uart_bridge #(
 
   // transmit passthrough
   always @(posedge clk) begin
-    if (rst) begin txd<=8'h00; txv<=1'b0; end
-    else begin
-      txv<=1'b0;
-      if (tx_valid_i && txr) begin txd<=tx_data_i; txv<=1'b1; end
+    if (rst) begin
+      txd <= 8'h00;
+      txv <= 1'b0;
+    end else begin
+      txv <= 1'b0;
+      if (tx_valid_i && txr) begin
+        txd <= tx_data_i;
+        txv <= 1'b1;
+      end
     end
   end
 
@@ -71,29 +78,57 @@ module uart_bridge #(
 
   always @(posedge clk) begin
     if (rst) begin
-      rx_data_o<=8'h00; rx_valid_o<=1'b0; frame_start<=1'b0; frame_end<=1'b0; frame_timeout<=1'b0;
-      sil_cnt<=24'd0; in_frame<=1'b0; crc_err<=1'b0; lrc_err<=1'b0;
+      rx_data_o <= 8'h00;
+      rx_valid_o <= 1'b0;
+      frame_start <= 1'b0;
+      frame_end <= 1'b0;
+      frame_timeout <= 1'b0;
+      sil_cnt <= 24'd0;
+      in_frame <= 1'b0;
+      crc_err <= 1'b0;
+      lrc_err <= 1'b0;
     end else begin
-      rx_valid_o<=1'b0; frame_start<=1'b0; frame_end<=1'b0; frame_timeout<=1'b0;
+      rx_valid_o <= 1'b0;
+      frame_start <= 1'b0;
+      frame_end <= 1'b0;
+      frame_timeout <= 1'b0;
 
       if (!ascii_en) begin
         // RTU
         if (rxv) begin
-          if (!in_frame) begin in_frame<=1'b1; frame_start<=1'b1; sil_cnt<=24'd0; end
-          sil_cnt<=24'd0;
-          rx_data_o<=rxd; rx_valid_o<=1'b1;
+          if (!in_frame) begin
+            in_frame <= 1'b1;
+            frame_start <= 1'b1;
+            sil_cnt <= 24'd0;
+          end
+          sil_cnt <= 24'd0;
+          rx_data_o <= rxd;
+          rx_valid_o <= 1'b1;
         end else if (in_frame) begin
-          if (sil_cnt < ({rtu_sil_q88,8'd0} * char_bits)) sil_cnt <= sil_cnt + {8'd0, baud_div};
-          else begin in_frame<=1'b0; frame_end<=1'b1; end
+          if (sil_cnt < ({rtu_sil_q88,8'd0} * char_bits))
+            sil_cnt <= sil_cnt + {8'd0, baud_div};
+          else begin
+            in_frame <= 1'b0;
+            frame_end <= 1'b1;
+          end
         end
       end else begin
         // ASCII: ':' start, CRLF end
         if (rxv) begin
           if (!in_frame) begin
-            if (rxd==8'h3A) begin in_frame<=1'b1; frame_start<=1'b1; rx_data_o<=rxd; rx_valid_o<=1'b1; end
+            if (rxd == 8'h3A) begin
+              in_frame <= 1'b1;
+              frame_start <= 1'b1;
+              rx_data_o <= rxd;
+              rx_valid_o <= 1'b1;
+            end
           end else begin
-            rx_data_o<=rxd; rx_valid_o<=1'b1;
-            if (rxd==8'h0A) begin in_frame<=1'b0; frame_end<=1'b1; end // LF
+            rx_data_o <= rxd;
+            rx_valid_o <= 1'b1;
+            if (rxd == 8'h0A) begin
+              in_frame <= 1'b0;
+              frame_end <= 1'b1;
+            end // LF
           end
         end
       end

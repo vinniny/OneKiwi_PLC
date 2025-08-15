@@ -173,7 +173,8 @@ assign timer_cnt = reg02_timer;
 
   // Writes
   function [31:0] wb;
-    input [31:0] oldv, newv; input [3:0] st;
+    input [31:0] oldv, newv;
+    input [3:0] st;
     begin
       wb = oldv;
       if (st[0]) wb[ 7:0 ] = newv[ 7:0 ];
@@ -189,7 +190,9 @@ assign timer_cnt = reg02_timer;
       reg04_cfg0 <= 32'h0001_0000; // Master=1, parity=None, stop=1, ASCII=0, sil=1
       reg05_cfg1 <= 32'h0080_0036; // wm=0x80, baud_div=54 (~115200 @ 100MHz/16)
       reg06_map  <= 32'h0;
-      tx_push    <= 1'b0; rx_pop <= 1'b0; tx_data<=8'h00;
+        tx_push    <= 1'b0;
+        rx_pop     <= 1'b0;
+        tx_data    <= 8'h00;
 
       // scan defaults
       reg08_scan_ctrl <= 32'h0001_0014; // en=1, retry_max=1, period=20ms
@@ -200,13 +203,17 @@ assign timer_cnt = reg02_timer;
       reg0d_scan_wbase<= 32'h0;
       reg0e_scan_rbase<= 32'h0;
     end else begin
-      tx_push <= 1'b0; rx_pop <= 1'b0;
+        tx_push <= 1'b0;
+        rx_pop  <= 1'b0;
 
       if (wr) begin
         case (PADDR[5:2])
           4'h0: reg00_do <= wb(reg00_do, PWDATA, PSTRB);
          
-          4'h3: if (tx_ready) begin tx_data <= PWDATA[7:0]; tx_push<=1'b1; end
+            4'h3: if (tx_ready) begin
+              tx_data <= PWDATA[7:0];
+              tx_push <= 1'b1;
+            end
           4'h4: reg04_cfg0 <= wb(reg04_cfg0, PWDATA, PSTRB);
           4'h5: reg05_cfg1 <= wb(reg05_cfg1, PWDATA, PSTRB);
           4'h6: reg06_map  <= wb(reg06_map , PWDATA, PSTRB);
