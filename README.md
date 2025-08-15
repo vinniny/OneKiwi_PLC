@@ -46,7 +46,9 @@ Pi running the OpenPLC runtime.
 
 ## Known Issues
 
-* Timing closure and synthesis reports are not included
+* Synthesis support is incomplete: no synthesis scripts or timing
+  constraints are provided and initial tool runs show unresolved
+  mapping issues
 * Software driver for OpenPLC is out of scope
 * Advanced Modbus scenarios (broadcast, exceptions) untested
 
