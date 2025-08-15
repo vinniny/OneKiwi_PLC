@@ -118,11 +118,11 @@ module top_modbus_converter_tb;
     // --- IRQ W1C ---
     apb_write(12'h01C, 32'hFFFF_FFFF);
     apb_read(12'h01C, rddata); if (rddata !== 32'h0000_0002) begin $display("ERROR: IRQ W1C %h", rddata); $finish; end
-    force dut.u_csr.stat_tx_empty = 1'b0;
+    force dut.stat_tx_empty = 1'b0;
     @(posedge PCLK);
     apb_write(12'h01C, 32'h0000_0002);
     apb_read(12'h01C, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: IRQ clear %h", rddata); $finish; end
-    release dut.u_csr.stat_tx_empty;
+    release dut.stat_tx_empty;
 
     // --- Scan control/table registers ---
     apb_write(12'h020, 32'h0000_0101);
