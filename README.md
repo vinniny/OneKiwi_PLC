@@ -59,14 +59,24 @@ Pi running the OpenPLC runtime.
 * Configure OpenPLC runtime to access the exposed CSR images and poll
   through the UART bridge
 
+## Dependencies
+
+The project relies on open-source EDA tooling for simulation and testing:
+
+* [Icarus Verilog](https://steveicarus.github.io/iverilog/) (`iverilog` and `vvp`) for compiling and running simulations
+* A POSIX-like shell environment (for example, Linux) to execute build commands
+
 ## Build Instructions
 
+Ensure the `build/` directory exists, then compile and run the core:
+
 ```sh
+mkdir -p build
 iverilog -g2001 -s top_modbus_converter -o build/top_modbus_converter.vvp src/*.v
 vvp build/top_modbus_converter.vvp
 ```
 
-For the provided testbench:
+To run the provided self-checking testbench:
 
 ```sh
 iverilog -g2001 -s top_modbus_converter_tb -o build/top_modbus_converter_tb.vvp src/*.v tb/top_modbus_converter_tb.v
