@@ -76,6 +76,9 @@ module uart_rx #(
               else st<=S_IDLE;
             end else os<=os-8'd1;
           end
+          default: begin
+            st <= S_IDLE;
+          end
         endcase
       end
     end
