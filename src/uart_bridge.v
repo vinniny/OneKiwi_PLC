@@ -3,7 +3,9 @@
 // - For ASCII: detects ':' start and CRLF end; passes bytes (including ':'..'\n').
 // Controller is responsible for CRC/LRC verification and TX frame formatting.
 module uart_bridge #(
+  /* verilator lint_off UNUSEDPARAM */
   parameter OVERSAMPLE = 16
+  /* verilator lint_on UNUSEDPARAM */
 )(
   input  wire        clk,
   input  wire        rst,
@@ -39,7 +41,9 @@ module uart_bridge #(
   // UART engines
   wire [7:0] rxd;
   wire       rxv;
+  /* verilator lint_off UNUSED */
   wire       ferr, perr;
+  /* verilator lint_on UNUSED */
   uart_rx u_rx(.clk(clk), .rst(rst), .rx_i(uart_rx_i),
                .baud_div(baud_div), .parity(parity), .stop2(stop2),
                .data_o(rxd), .valid_o(rxv), .framing_err(ferr), .parity_err(perr));
