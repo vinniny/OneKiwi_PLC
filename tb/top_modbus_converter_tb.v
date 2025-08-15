@@ -69,87 +69,79 @@ module top_modbus_converter_tb;
     repeat (5) @(posedge PCLK);
 
     // --- Check default register values ---
-    apb_read(12'h000, rddata); // DO
-    if (rddata !== 32'h0000_0000) begin $display("ERROR: DO reset value %h", rddata); $finish; end
-    apb_read(12'h004, rddata); // DI
-    if (rddata !== 32'h0000_0000) begin $display("ERROR: DI reset value %h", rddata); $finish; end
-    apb_read(12'h008, rddata); // TIMER should be small after reset
-    if (rddata > 32'd16) begin $display("ERROR: TIMER reset value %h", rddata); $finish; end
-    apb_read(12'h010, rddata); // CFG0
-    if (rddata !== 32'h0001_0000) begin $display("ERROR: CFG0 reset value %h", rddata); $finish; end
-    apb_read(12'h014, rddata); // CFG1
-    if (rddata !== 32'h0080_0036) begin $display("ERROR: CFG1 reset value %h", rddata); $finish; end
+    apb_read(12'h000, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: DO reset %h", rddata); $finish; end
+    apb_read(12'h004, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: DI reset %h", rddata); $finish; end
+    apb_read(12'h008, rddata); if (rddata > 32'd16) begin $display("ERROR: TIMER reset %h", rddata); $finish; end
+    apb_read(12'h00C, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: MSG reset %h", rddata); $finish; end
+    apb_read(12'h010, rddata); if (rddata !== 32'h0001_0000) begin $display("ERROR: CFG0 reset %h", rddata); $finish; end
+    apb_read(12'h014, rddata); if (rddata !== 32'h0080_0036) begin $display("ERROR: CFG1 reset %h", rddata); $finish; end
+    apb_read(12'h018, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: MAP reset %h", rddata); $finish; end
+    apb_read(12'h01C, rddata); if (rddata !== 32'h0000_0002) begin $display("ERROR: IRQ reset %h", rddata); $finish; end
+    apb_read(12'h020, rddata); if (rddata !== 32'h0001_0014) begin $display("ERROR: SCAN_CTRL reset %h", rddata); $finish; end
+    apb_read(12'h028, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: SCAN_IDX reset %h", rddata); $finish; end
+    apb_read(12'h02C, rddata); if (rddata !== 32'h0001_0400) begin $display("ERROR: SCAN_ENTRY reset %h", rddata); $finish; end
+    apb_read(12'h030, rddata); if (rddata !== 32'h0010_0010) begin $display("ERROR: SCAN_QTY reset %h", rddata); $finish; end
+    apb_read(12'h034, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: SCAN_WBASE reset %h", rddata); $finish; end
+    apb_read(12'h038, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: SCAN_RBASE reset %h", rddata); $finish; end
 
-    // --- Full write/read DO register ---
+    // --- DO write/read tests ---
     apb_write(12'h000, 32'hDEADBEEF);
-    apb_read(12'h000, rddata);
-    if (rddata !== 32'hDEADBEEF) begin $display("ERROR: DO readback %h", rddata); $finish; end
+    apb_read(12'h000, rddata); if (rddata !== 32'hDEADBEEF) begin $display("ERROR: DO readback %h", rddata); $finish; end
+    apb_write_masked(12'h000, 32'h1234_5678, 4'b0011);
+    apb_read(12'h000, rddata); if (rddata !== 32'hDEAD_5678) begin $display("ERROR: DO partial %h", rddata); $finish; end
 
-    // --- Partial write to DO (upper half unchanged) ---
-    apb_write_masked(12'h000, 32'h1234_5678, 4'b0011); // write lower 16b
-    apb_read(12'h000, rddata);
-    if (rddata !== 32'hDEAD_5678) begin $display("ERROR: DO partial write got %h", rddata); $finish; end
-
-    // --- Attempt write to read-only DI register ---
+    // --- DI write should be ignored ---
     apb_write(12'h004, 32'hFFFF_FFFF);
-    apb_read(12'h004, rddata);
-    if (rddata !== 32'h0000_0000) begin $display("ERROR: DI should ignore writes %h", rddata); $finish; end
+    apb_read(12'h004, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: DI write ignored %h", rddata); $finish; end
 
-    // --- Drive GPIO_DI and read DI register ---
+    // --- Drive GPIO_DI and read DI ---
     GPIO_DI = 32'hA5A55A5A;
     repeat (2) @(posedge PCLK);
-    apb_read(12'h004, rddata);
-    if (rddata !== 32'hA5A55A5A) begin $display("ERROR: DI read %h", rddata); $finish; end
+    apb_read(12'h004, rddata); if (rddata !== 32'hA5A55A5A) begin $display("ERROR: DI read %h", rddata); $finish; end
 
-    // --- Write timer and verify increment ---
+    // --- Timer write and verify increment ---
     apb_write(12'h008, 32'h0000_00F0);
-    apb_read(12'h008, rddata);
-    if (rddata < 32'h0000_00F0 || rddata > 32'h0000_00F3) begin $display("ERROR: Timer writeback %h", rddata); $finish; end
+    apb_read(12'h008, rddata); if (rddata < 32'h0000_00F0 || rddata > 32'h0000_00F3) begin $display("ERROR: Timer writeback %h", rddata); $finish; end
     repeat (10) @(posedge PCLK);
-    apb_read(12'h008, rddata2);
-    if (rddata2 <= rddata) begin $display("ERROR: Timer did not increment %h -> %h", rddata, rddata2); $finish; end
+    apb_read(12'h008, rddata2); if (rddata2 <= rddata) begin $display("ERROR: Timer did not increment %h -> %h", rddata, rddata2); $finish; end
 
-    // --- Write/read configuration registers ---
-    apb_write(12'h010, 32'h0000_0105); // mode slave, parity even, stop2
-    apb_write(12'h014, 32'h0001_0020); // baud_div=0x20, msg_wm=0x0001
-    apb_read(12'h010, rddata);
-    if (rddata !== 32'h0000_0105) begin $display("ERROR: CFG0 mismatch %h", rddata); $finish; end
-    apb_read(12'h014, rddata);
-    if (rddata !== 32'h0001_0020) begin $display("ERROR: CFG1 mismatch %h", rddata); $finish; end
+    // --- Configuration register writes ---
+    apb_write(12'h010, 32'h0000_0105);
+    apb_write(12'h014, 32'h0001_0020);
+    apb_read(12'h010, rddata); if (rddata !== 32'h0000_0105) begin $display("ERROR: CFG0 mismatch %h", rddata); $finish; end
+    apb_read(12'h014, rddata); if (rddata !== 32'h0001_0020) begin $display("ERROR: CFG1 mismatch %h", rddata); $finish; end
+
+    // --- MAP base register ---
+    apb_write(12'h018, 32'h0000_0044);
+    apb_read(12'h018, rddata); if (rddata !== 32'h0000_0044) begin $display("ERROR: MAP write %h", rddata); $finish; end
+
+    // --- IRQ W1C ---
+    apb_write(12'h01C, 32'hFFFF_FFFF);
+    apb_read(12'h01C, rddata); if (rddata !== 32'h0000_0002) begin $display("ERROR: IRQ W1C %h", rddata); $finish; end
+    force dut.u_csr.stat_tx_empty = 1'b0;
+    @(posedge PCLK);
+    apb_write(12'h01C, 32'h0000_0002);
+    apb_read(12'h01C, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: IRQ clear %h", rddata); $finish; end
+    release dut.u_csr.stat_tx_empty;
+
+    // --- Scan control/table registers ---
+    apb_write(12'h020, 32'h0000_0101);
+    apb_write(12'h028, 32'h0000_0001);
+    apb_write(12'h02C, 32'h0100_0302);
+    apb_write(12'h030, 32'h0004_0002);
+    apb_write(12'h034, 32'h0000_0020);
+    apb_write(12'h038, 32'h0000_0030);
+    apb_read(12'h020, rddata); if (rddata !== 32'h0000_0101) begin $display("ERROR: SCAN_CTRL %h", rddata); $finish; end
+    apb_read(12'h028, rddata); if (rddata !== 32'h0000_0001) begin $display("ERROR: SCAN_IDX %h", rddata); $finish; end
+    apb_read(12'h02C, rddata); if (rddata !== 32'h0100_0302) begin $display("ERROR: SCAN_ENTRY %h", rddata); $finish; end
+    apb_read(12'h030, rddata); if (rddata !== 32'h0004_0002) begin $display("ERROR: SCAN_QTY %h", rddata); $finish; end
+    apb_read(12'h034, rddata); if (rddata !== 32'h0000_0020) begin $display("ERROR: SCAN_WBASE %h", rddata); $finish; end
+    apb_read(12'h038, rddata); if (rddata !== 32'h0000_0030) begin $display("ERROR: SCAN_RBASE %h", rddata); $finish; end
 
     // --- Check PSLVERR stays low ---
     if (PSLVERR !== 1'b0) begin $display("ERROR: PSLVERR asserted"); $finish; end
 
     $display("All tests passed");
-
-    // --- Write and read back DO register ---
-    apb_write(12'h000, 32'hDEADBEEF);
-    apb_read(12'h000, rddata);
-    if (rddata !== 32'hDEADBEEF) begin
-      $display("ERROR: DO readback %h", rddata);
-      $finish;
-    end
-
-    // --- Drive GPIO_DI and read DI register ---
-    GPIO_DI = 32'hA5A55A5A;
-    repeat (5) @(posedge PCLK);
-    apb_read(12'h004, rddata);
-    if (rddata !== 32'hA5A55A5A) begin
-      $display("ERROR: DI read %h", rddata);
-      $finish;
-    end
-
-    // --- Check timer increment ---
-    apb_read(12'h008, rddata);
-    repeat (10) @(posedge PCLK);
-    apb_read(12'h008, rddata2);
-    if (rddata2 <= rddata) begin
-      $display("ERROR: timer did not increment (%h -> %h)", rddata, rddata2);
-      $finish;
-    end
-
-    $display("Testbench completed");
-
     #20 $finish;
   end
 
@@ -206,4 +198,3 @@ module top_modbus_converter_tb;
   end
   endtask
 endmodule
-
