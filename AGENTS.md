@@ -1,0 +1,95 @@
+# AGENTS.md – Modbus Converter IP Core (Codex Build Guide)
+
+## Overview
+This project implements a **parameterizable Modbus Converter IP Core** in Verilog that bridges a Linux host (running OpenPLC runtime on Raspberry Pi) to GPIO I/O and external Modbus RTU/ASCII devices.
+
+The design is modular, synthesis-ready for FPGA/ASIC, and follows a fully synchronous reset style with an APB CSR slave interface.
+
+---
+
+## Agent Roles
+
+### 1. **CSR Agent** (`csr_block.v`)
+- Implements AMBA 3 APB-compliant CSR slave
+- Handles register access for:
+  - REG00: Digital Output Control (%QX)
+  - REG01: Digital Input Status (%IX)
+  - REG02: Timer/Counter
+  - REG03: Modbus message buffer
+- Parameterizable register widths
+- Ensures synchronous read/write timing
+
+---
+
+### 2. **UART Agents**
+#### **UART RX** (`uart_rx.v`)
+- Receives Modbus RTU/ASCII frames
+- Detects framing boundaries:
+  - RTU: 3.5 char silent interval
+  - ASCII: colon start, CRLF end
+- Performs CRC16/LRC checking
+
+#### **UART TX** (`uart_tx.v`)
+- Transmits Modbus response frames
+- Handles timing gaps for RTU/ASCII mode
+- Works with Modbus Controller for response scheduling
+
+---
+
+### 3. **UART Bridge Agent** (`uart_bridge.v`)
+- Interfaces UART RX/TX with Modbus Controller
+- Buffers incoming/outgoing frames
+- Passes validated frames to Modbus FSM
+
+---
+
+### 4. **GPIO Agents**
+#### **GPIO Input** (`gpio_input.v`)
+- Reads digital inputs from hardware pins
+- Maps to Modbus %IX registers
+
+#### **GPIO Output** (`gpio_output.v`)
+- Writes digital outputs from Modbus %QX commands
+- Latches outputs on Modbus write function codes (05, 0F, 06, 10)
+
+---
+
+### 5. **Modbus Controller Agent** (`modbus_controller.v`)
+- FSM for Modbus protocol handling
+- Supports function codes:
+  - 01: Read Coils
+  - 02: Read Discrete Inputs
+  - 03: Read Holding Registers
+  - 04: Read Input Registers
+  - 05: Write Single Coil
+  - 06: Write Single Register
+  - 0F: Write Multiple Coils
+  - 10: Write Multiple Registers
+- Configurable Master/Slave mode
+- Interfaces with GPIO and CSR
+
+---
+
+## Simulation Agent
+- Self-checking testbench for:
+  - RTU and ASCII mode frames
+  - Valid CRC16 and LRC verification
+  - GPIO loopback
+  - Timing checks
+- Automatic pass/fail scoreboard
+
+---
+
+## Deliverables
+- **RTL:** Verilog `.v` source files
+- **Testbench:** Self-checking `.v` files
+- **Docs:** PDF with block diagrams, FSM diagrams, register map, timing
+- **Constraints:** FPGA synthesis constraints
+- **Scripts:** ModelSim/Xcelium simulation scripts
+
+---
+
+## Notes
+- All modules are **parameterized** for reuse.
+- Only synchronous resets are used.
+- APB interface is AMBA 3 compliant.
