@@ -57,6 +57,14 @@ module top_modbus_converter #(
   wire [15:0] cfg_map_base_qw_iw;
 
   wire        stat_crc_err, stat_lrc_err, stat_frame_to;
+  reg         stat_tx_empty;
+
+  always @(posedge PCLK) begin
+    if (rst)
+      stat_tx_empty <= 1'b1;
+    else
+      stat_tx_empty <= 1'b1;
+  end
 
   // Scan CSRs
   wire        scan_en;
@@ -80,7 +88,7 @@ module top_modbus_converter #(
     .cfg_ascii_en(cfg_ascii_en), .cfg_rtu_sil_q88(cfg_rtu_sil_q88),
     .cfg_baud_div(cfg_baud_div), .cfg_msg_wm(cfg_msg_wm), .cfg_map_base_qw_iw(cfg_map_base_qw_iw),
     .stat_crc_err(stat_crc_err), .stat_lrc_err(stat_lrc_err), .stat_frame_to(stat_frame_to),
-    .stat_tx_empty(1'b1), .stat_rx_avail(csr_rx_valid),
+    .stat_tx_empty(stat_tx_empty), .stat_rx_avail(csr_rx_valid),
     .irq_w1c(irq_w1c),
 
     .scan_en(scan_en), .scan_retry_max(scan_retry_max), .scan_period_ms(scan_period_ms),
