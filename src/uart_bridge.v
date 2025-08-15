@@ -60,7 +60,8 @@ module uart_bridge #(
 
   // RTU silence detector
   // char_bits ≈ 10 + parity + stop2
-  wire [3:0] char_bits = 4'd10 + (parity!=2'd0) + (stop2?1:0);
+  // Cast parity/stop flags to 4 bits to avoid width expansion warnings
+  wire [3:0] char_bits = 4'd10 + (parity!=2'd0 ? 4'd1 : 4'd0) + (stop2 ? 4'd1 : 4'd0);
   reg  [23:0] sil_cnt;
   reg         in_frame;
 
@@ -78,7 +79,7 @@ module uart_bridge #(
           sil_cnt<=24'd0;
           rx_data_o<=rxd; rx_valid_o<=1'b1;
         end else if (in_frame) begin
-          if (sil_cnt < ({rtu_sil_q88,8'd0} * char_bits)) sil_cnt <= sil_cnt + baud_div;
+          if (sil_cnt < ({rtu_sil_q88,8'd0} * char_bits)) sil_cnt <= sil_cnt + {8'd0, baud_div};
           else begin in_frame<=1'b0; frame_end<=1'b1; end
         end
       end else begin

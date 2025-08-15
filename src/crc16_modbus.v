@@ -13,7 +13,8 @@ module crc16_modbus(
     input [15:0] cin; input [7:0] d;
     integer i; reg [15:0] x;
     begin
-      x = cin ^ d;
+      // Extend incoming byte to 16 bits before XOR to avoid width mismatch
+      x = cin ^ {8'h00, d};
       for (i=0;i<8;i=i+1) begin
         if (x[0]) x = (x>>1) ^ 16'hA001;
         else      x = (x>>1);

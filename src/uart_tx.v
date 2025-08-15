@@ -63,6 +63,11 @@ module uart_tx #(
             else begin st<=S_IDLE; ready_o<=1'b1; end
           end else os<=os-8'd1;
         end
+        default: begin
+          st <= S_IDLE;
+          tx_o <= 1'b1;
+          ready_o <= 1'b1;
+        end
       endcase
     end
   end

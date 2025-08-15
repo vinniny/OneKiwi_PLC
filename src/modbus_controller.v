@@ -7,7 +7,8 @@ module modbus_controller #(
   parameter REG_WORDS = 64,
   parameter SCAN_MAX  = 16,
   // limit RX/TX buffer depth to keep synthesis time manageable
-  parameter BUF_MAX   = 128
+  // Increased to 256 to align buffer indexing widths
+  parameter BUF_MAX   = 256
 )(
   input  wire        clk,
   input  wire        rst,
@@ -70,7 +71,7 @@ module modbus_controller #(
 
   // ===== Shared temporaries =====
   integer i,j,k,bitn,ofs,base;
-  integer bytes, blen;
+  integer bytes, blen, shamt;
   reg [7:0] b, nb0, nb1, bc, sum;
   // temp for ASCII hex -> binary
   (* ram_style = "block" *) reg [7:0] bin [0:BUF_MAX-1];
@@ -110,7 +111,8 @@ module modbus_controller #(
         if (i0 < n) begin
           d0 = rx_buf[i0[7:0]];
           for (j0=0;j0<8;j0=j0+1) begin
-            if (((c0^d0) & 16'h0001)!=16'h0000) c0=(c0>>1)^16'hA001; else c0=(c0>>1);
+            // Extend byte to match 16-bit CRC width before XOR
+            if (((c0 ^ {8'h00, d0}) & 16'h0001)!=16'h0000) c0=(c0>>1)^16'hA001; else c0=(c0>>1);
             d0 = d0 >> 1;
           end
         end
@@ -166,9 +168,9 @@ module modbus_controller #(
         S_COLLECT: begin
           if (rx_b_v) begin
             rx_buf[rx_len] <= rx_b;
-          if (rx_len != (BUF_MAX-1)) begin
-              rx_len <= rx_len + 8'd1;
-            end
+              if ({1'b0, rx_len} != BUF_MAX-1) begin
+                rx_len <= rx_len + 8'd1;
+              end
           end
           if (frame_end) begin
             st <= S_PARSE;
@@ -209,7 +211,7 @@ module modbus_controller #(
 
             // Expect rx_buf[0] = ':' ; data from [1 .. rx_len-3], LRC at last byte before CRLF
             for (i=1; i<BUF_MAX-3; i=i+2) begin
-              if ((i+1) < (rx_len-2)) begin
+                if ((i+1) < ({24'd0, rx_len} - 32'd2)) begin
                 nb0 = hex2nib(rx_buf[i[7:0]]);
                 nb1 = hex2nib(rx_buf[(i+1) & (BUF_MAX-1)]);
                 if (nb0==8'hFF || nb1==8'hFF) begin
@@ -230,7 +232,8 @@ module modbus_controller #(
               for (k=0; k<BUF_MAX; k=k+1) begin
                 if (k < blen) rx_buf[k[7:0]] = bin[k[7:0]];
               end
-              rx_len = blen[7:0];
+              // Use non-blocking assignment for sequential consistency
+              rx_len <= blen[7:0];
 
               // verify LRC: sum of bytes including address..data..LRC == 0
               sum = 8'h00;
@@ -267,24 +270,25 @@ module modbus_controller #(
             // ---------- SLAVE ----------
               if (func==8'h01 || func==8'h02) begin
                 // read coils/discretes
-                bytes  = (qty + 16'd7) >> 3;
-                tx_len = 9'd0;
+                  bytes  = ({16'd0, qty} + 32'd7) >> 3;
+                tx_len <= 9'd0;
 
                 // resp: addr func bytecount data... crc
-                tx_buf[tx_len[7:0]] = dev_addr; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = func;     tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = bytes[7:0]; tx_len = tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= dev_addr; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= func;     tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= bytes[7:0]; tx_len <= tx_len + 9'd1;
 
                 for (i=0; i<BUF_MAX; i=i+1) begin
                   if (i < bytes) begin
                     b = 8'h00;
                     for (bitn=0; bitn<8; bitn=bitn+1) begin
                       if ((i*8+bitn) < qty) begin
-                        if (func==8'h01) b[bitn] = ((do_wdata >> (addr + i*8 + bitn)) & 1'b1);
-                        else             b[bitn] = ((di_status >> (addr + i*8 + bitn)) & 1'b1);
+                        shamt = {16'd0, addr} + i*8 + bitn;
+                        if (func==8'h01) b[bitn] = (((do_wdata >> shamt) & 32'h1) != 32'h0);
+                        else             b[bitn] = (((di_status >> shamt) & 32'h1) != 32'h0);
                       end
                     end
-                    tx_buf[tx_len[7:0]] = b; tx_len = tx_len + 9'd1;
+                    tx_buf[tx_len[7:0]] <= b; tx_len <= tx_len + 9'd1;
                   end
                 end
 
@@ -292,33 +296,36 @@ module modbus_controller #(
                 c = 16'hFFFF;
                 for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
-                    x = c ^ tx_buf[j];
+                    // Extend byte to 16 bits for XOR to avoid width mismatch
+                    x = c ^ {8'h00, tx_buf[j]};
                     for (k=0; k<8; k=k+1) begin
                       if (x[0]) x = (x>>1) ^ 16'hA001; else x = (x>>1);
                     end
                     c = x;
                   end
                 end
-                tx_buf[tx_len[7:0]] = c[7:0];  tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = c[15:8]; tx_len = tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[7:0];  tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[15:8]; tx_len <= tx_len + 9'd1;
 
                 st <= S_SEND; tx_idx <= 9'd0;
 
               end else if (func==8'h03 || func==8'h04) begin
                 // read holding/input regs
-                tx_len = 9'd0;
-                tx_buf[tx_len[7:0]] = dev_addr; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = func;     tx_len = tx_len + 9'd1;
+                tx_len <= 9'd0;
+                tx_buf[tx_len[7:0]] <= dev_addr; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= func;     tx_len <= tx_len + 9'd1;
 
-                tmp8 = (qty << 1);                 // avoid (qty<<1)[7:0]
-                tx_buf[tx_len[7:0]] = tmp8; tx_len = tx_len + 9'd1;
+                  // Shift and mask to 8 bits
+                  tmp8 = qty[7:0] << 1;
+                tx_buf[tx_len[7:0]] <= tmp8; tx_len <= tx_len + 9'd1;
 
                 for (i=0; i<REG_WORDS; i=i+1) begin
                   if (i < qty) begin
-                    if (func==8'h03) w = reg_holding[(addr + i) - cfg_map_base_qw_iw];
-                    else             w = reg_input  [(addr + i) - cfg_map_base_qw_iw];
-                    tx_buf[tx_len[7:0]] = w[15:8]; tx_len = tx_len + 9'd1;
-                    tx_buf[tx_len[7:0]] = w[7:0];  tx_len = tx_len + 9'd1;
+                    ofs = {16'd0, addr} + i - {16'd0, cfg_map_base_qw_iw};
+                    if (func==8'h03) w = reg_holding[ofs[5:0]];
+                    else             w = reg_input  [ofs[5:0]];
+                    tx_buf[tx_len[7:0]] <= w[15:8]; tx_len <= tx_len + 9'd1;
+                    tx_buf[tx_len[7:0]] <= w[7:0];  tx_len <= tx_len + 9'd1;
                   end
                 end
 
@@ -326,13 +333,14 @@ module modbus_controller #(
                 c = 16'hFFFF;
                 for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
-                    x = c ^ tx_buf[j];
+                    // Extend byte to 16 bits for XOR to avoid width mismatch
+                    x = c ^ {8'h00, tx_buf[j]};
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
                     c = x;
                   end
                 end
-                tx_buf[tx_len[7:0]] = c[7:0];  tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = c[15:8]; tx_len = tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[7:0];  tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[15:8]; tx_len <= tx_len + 9'd1;
 
                 st <= S_SEND; tx_idx <= 9'd0;
 
@@ -342,43 +350,44 @@ module modbus_controller #(
                 do_wdata <= (val==16'hFF00) ? (32'h1 << addr[4:0]) : 32'h0;
                 do_we    <= 1'b1;
 
-                tx_len = 9'd0;
+                tx_len <= 9'd0;
                 for (j=0; j<6; j=j+1) begin
-                  tx_buf[tx_len[7:0]] = rx_buf[j]; tx_len = tx_len + 9'd1;
+                  tx_buf[tx_len[7:0]] <= rx_buf[j]; tx_len <= tx_len + 9'd1;
                 end
 
                 c = 16'hFFFF;
                 for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
-                    x = c ^ tx_buf[j];
+                    x = c ^ {8'h00, tx_buf[j]};
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
                     c = x;
                   end
                 end
-                tx_buf[tx_len[7:0]] = c[7:0];  tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = c[15:8]; tx_len = tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[7:0];  tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[15:8]; tx_len <= tx_len + 9'd1;
 
                 st <= S_SEND; tx_idx <= 9'd0;
 
               end else if (func==8'h06) begin
                 // write single holding reg
-                reg_holding[addr - cfg_map_base_qw_iw] <= val;
+                ofs = {16'd0, addr} - {16'd0, cfg_map_base_qw_iw};
+                reg_holding[ofs[5:0]] <= val;
 
-                tx_len = 9'd0;
+                tx_len <= 9'd0;
                 for (j=0; j<6; j=j+1) begin
-                  tx_buf[tx_len[7:0]] = rx_buf[j]; tx_len = tx_len + 9'd1;
+                  tx_buf[tx_len[7:0]] <= rx_buf[j]; tx_len <= tx_len + 9'd1;
                 end
 
                 c = 16'hFFFF;
                 for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
-                    x = c ^ tx_buf[j];
+                    x = c ^ {8'h00, tx_buf[j]};
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
                     c = x;
                   end
                 end
-                tx_buf[tx_len[7:0]] = c[7:0];  tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = c[15:8]; tx_len = tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[7:0];  tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[15:8]; tx_len <= tx_len + 9'd1;
 
                 st <= S_SEND; tx_idx <= 9'd0;
 
@@ -386,39 +395,40 @@ module modbus_controller #(
                 // write multiple coils: unpack data starting rx_buf[7..7+byte_count-1]
                 new_do = 32'h0;
                 msk    = 32'h0;
-                for (i=0; i<32; i=i+1) begin
-                  if (i < byte_count) begin
-                    for (bitn=0; bitn<8; bitn=bitn+1) begin
-                      if ((i*8+bitn) < qty) begin
-                        msk[addr + i*8 + bitn]    = 1'b1;
-                        new_do[addr + i*8 + bitn] = rx_buf[7+i][bitn];
+                  for (i=0; i<32; i=i+1) begin
+                    if (i < byte_count) begin
+                      for (bitn=0; bitn<8; bitn=bitn+1) begin
+                        if ((i*8+bitn) < qty) begin
+                          shamt = {16'd0, addr} + i*8 + bitn;
+                          msk[shamt[4:0]]    = 1'b1;
+                          new_do[shamt[4:0]] = rx_buf[7+i][bitn];
+                        end
                       end
                     end
                   end
-                end
                 do_wmask <= msk;
                 do_wdata <= new_do;
                 do_we    <= 1'b1;
 
                 // Response: echo addr func start qty
-                tx_len = 9'd0;
-                tx_buf[tx_len[7:0]] = dev_addr; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = func;     tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = rx_buf[2]; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = rx_buf[3]; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = rx_buf[4]; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = rx_buf[5]; tx_len = tx_len + 9'd1;
+                tx_len <= 9'd0;
+                tx_buf[tx_len[7:0]] <= dev_addr; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= func;     tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= rx_buf[2]; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= rx_buf[3]; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= rx_buf[4]; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= rx_buf[5]; tx_len <= tx_len + 9'd1;
 
                 c = 16'hFFFF;
                 for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
-                    x = c ^ tx_buf[j];
+                    x = c ^ {8'h00, tx_buf[j]};
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
                     c = x;
                   end
                 end
-                tx_buf[tx_len[7:0]] = c[7:0];  tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = c[15:8]; tx_len = tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[7:0];  tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[15:8]; tx_len <= tx_len + 9'd1;
 
                 st <= S_SEND; tx_idx <= 9'd0;
 
@@ -426,30 +436,31 @@ module modbus_controller #(
                 // write multiple holding regs: unpack words from rx_buf[7..]
                 for (i=0; i<REG_WORDS; i=i+1) begin
                   if (i < qty) begin
-                    w = {rx_buf[7+i*2], rx_buf[8+i*2]};
-                    reg_holding[(addr + i) - cfg_map_base_qw_iw] <= w;
+                      w = {rx_buf[7+i*2], rx_buf[8+i*2]};
+                      ofs = {16'd0, addr} + i - {16'd0, cfg_map_base_qw_iw};
+                      reg_holding[ofs[5:0]] <= w;
                   end
                 end
 
                 // Response: echo addr func start qty
-                tx_len = 9'd0;
-                tx_buf[tx_len[7:0]] = dev_addr; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = func;     tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = rx_buf[2]; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = rx_buf[3]; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = rx_buf[4]; tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = rx_buf[5]; tx_len = tx_len + 9'd1;
+                tx_len <= 9'd0;
+                tx_buf[tx_len[7:0]] <= dev_addr; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= func;     tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= rx_buf[2]; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= rx_buf[3]; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= rx_buf[4]; tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= rx_buf[5]; tx_len <= tx_len + 9'd1;
 
                 c = 16'hFFFF;
                 for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
-                    x = c ^ tx_buf[j];
+                    x = c ^ {8'h00, tx_buf[j]};
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
                     c = x;
                   end
                 end
-                tx_buf[tx_len[7:0]] = c[7:0];  tx_len = tx_len + 9'd1;
-                tx_buf[tx_len[7:0]] = c[15:8]; tx_len = tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[7:0];  tx_len <= tx_len + 9'd1;
+                tx_buf[tx_len[7:0]] <= c[15:8]; tx_len <= tx_len + 9'd1;
 
                 st <= S_SEND; tx_idx <= 9'd0;
 
@@ -460,12 +471,12 @@ module modbus_controller #(
             // ---------- MASTER (handle responses) ----------
             if (func==8'h01 || func==8'h02) begin
               bc  = rx_buf[2];
-              ofs = scan_rbase;
+              ofs = {16'd0, scan_rbase};
               st <= S_IDLE;
             end
 
               else if (func==8'h03 || func==8'h04) begin
-                base = scan_rbase;
+                  base = {16'd0, scan_rbase};
                 for (i=0; i<REG_WORDS; i=i+1) begin
                   if (i < qty) begin
                     w = {rx_buf[3+i*2], rx_buf[4+i*2]};
