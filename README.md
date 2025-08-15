@@ -4,6 +4,8 @@ Modbus Converter IP core linking a Linux host running OpenPLC to external
 Modbus devices and on-board GPIO. The design is written in plain
 Verilog‑2001 and organized for use in FPGA or ASIC flows.
 
+![Modbus architecture diagram](MODBUS.png)
+
 ## Overview
 
 OneKiwi_PLC bridges an APB3 CSR interface, UART-connected Modbus devices
