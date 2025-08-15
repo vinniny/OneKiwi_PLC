@@ -5,7 +5,9 @@
 
 module modbus_controller #(
   parameter REG_WORDS = 64,
+  /* verilator lint_off UNUSEDPARAM */
   parameter SCAN_MAX  = 16,
+  /* verilator lint_on UNUSEDPARAM */
   // limit RX/TX buffer depth to keep synthesis time manageable
   // Increased to 256 to align buffer indexing widths
   parameter BUF_MAX   = 256
@@ -55,6 +57,14 @@ module modbus_controller #(
   output reg  [15:0] scan_err_count
 );
 
+  /* verilator lint_off UNUSED */
+  wire unused_scan_inputs;
+  assign unused_scan_inputs = scan_en |
+                              |scan_retry_max | |scan_period_ms | |scan_idx | |scan_slave |
+                              |scan_func | |scan_start_addr | |scan_qty |
+                              |scan_byte_count | |scan_wbase | |scan_rbase;
+  /* verilator lint_on UNUSED */
+
   // ===== Internal process images =====
   reg [15:0] reg_holding [0:REG_WORDS-1];
   reg [15:0] reg_input   [0:REG_WORDS-1];
@@ -73,6 +83,10 @@ module modbus_controller #(
   integer i,j,k,bitn,ofs,base,tx_wr;
   integer bytes, blen, shamt;
   reg [7:0] b, nb0, nb1, bc, sum;
+  /* verilator lint_off UNUSED */
+  wire unused_ofs_bits = |ofs[31:6];
+  wire unused_bc       = |bc;
+  /* verilator lint_on UNUSED */
   // temp for ASCII hex -> binary
   (* ram_style = "block" *) reg [7:0] bin [0:BUF_MAX-1];
   reg [15:0] w, c, x;
@@ -80,12 +94,17 @@ module modbus_controller #(
   reg        ascii_err;
   reg [7:0]  tmp8;
 
-  // CRC/LRC helpers (kept for compatibility; not used directly here)
-  reg         crc_clr, lrc_clr;
+  // CRC/LRC helpers (kept for compatibility; currently unused)
+  wire        crc_clr = 1'b0;
+  wire        lrc_clr = 1'b0;
   wire [15:0] crc_val;
   wire [7:0]  lrc_val;
   crc16_modbus u_crc(.clk(clk), .rst(rst), .clr(crc_clr), .data_i(rx_b), .valid_i(rx_b_v & frame_start), .crc_o(crc_val));
   lrc_ascii   u_lrc(.clk(clk), .rst(rst), .clr(lrc_clr), .data_i(rx_b), .valid_i(rx_b_v & frame_start), .lrc_o(lrc_val));
+
+  /* verilator lint_off UNUSED */
+  wire unused_crc = |crc_val | |lrc_val;
+  /* verilator lint_on UNUSED */
 
   // ===== Controller FSM =====
   localparam [3:0]
@@ -93,8 +112,7 @@ module modbus_controller #(
     S_COLLECT = 4'd1,
     S_PARSE   = 4'd2,
     S_EXEC    = 4'd3,
-    S_BUILD   = 4'd4, // unused placeholder
-    S_SEND    = 4'd5;
+    S_SEND    = 4'd4;
 
   reg [3:0]  st;
   reg [7:0]  dev_addr, func;
@@ -102,6 +120,7 @@ module modbus_controller #(
   reg [7:0]  byte_count;
 
   // ----- helper functions -----
+  /* verilator lint_off BLKSEQ */
   function [15:0] crc16_sw;
     input [7:0] n;
     integer i0,j0; reg [15:0] c0; reg [7:0] d0;
@@ -120,6 +139,7 @@ module modbus_controller #(
       crc16_sw = c0;
     end
   endfunction
+  /* verilator lint_on BLKSEQ */
 
   function [7:0] hex2nib;
     input [7:0] c_in;
@@ -133,6 +153,7 @@ module modbus_controller #(
   endfunction
 
   // ===== Main sequential block =====
+  /* verilator lint_off BLKSEQ */
   always @(posedge clk) begin
     if (rst) begin
       st <= S_IDLE;
@@ -148,11 +169,15 @@ module modbus_controller #(
       stat_crc_err  <= 1'b0;
       stat_lrc_err  <= 1'b0;
       stat_frame_to <= 1'b0;
+      scan_cycles_done <= 16'd0;
+      scan_err_count   <= 16'd0;
 
       rx_in_ascii <= 1'b0;
     end else begin
       tx_b_v <= 1'b0;
       do_we  <= 1'b0;
+      scan_cycles_done <= 16'd0;
+      scan_err_count   <= 16'd0;
 
       case (st)
         // =========================
@@ -515,4 +540,5 @@ module modbus_controller #(
       endcase
     end
   end
+  /* verilator lint_on BLKSEQ */
 endmodule
