@@ -34,14 +34,18 @@ module top_modbus_converter #(
 
   // Wires between blocks
   wire [31:0] di_status;
+  /* verilator lint_off UNUSED */
   wire [31:0] do_control;
   wire [31:0] timer_cnt;
-
-  wire [7:0]  csr_rx_data;
-  wire        csr_rx_valid;
   wire        csr_rx_pop;
   wire [7:0]  csr_tx_data;
   wire        csr_tx_push;
+  wire [15:0] cfg_msg_wm;
+  wire        irq_w1c;
+  /* verilator lint_on UNUSED */
+
+  wire [7:0]  csr_rx_data;
+  wire        csr_rx_valid;
   wire        csr_tx_ready;
 
   wire        cfg_mode_master;
@@ -50,10 +54,9 @@ module top_modbus_converter #(
   wire        cfg_ascii_en;
   wire [15:0] cfg_rtu_sil_q88;
   wire [15:0] cfg_baud_div;
-  wire [15:0] cfg_msg_wm;
   wire [15:0] cfg_map_base_qw_iw;
 
-  wire        irq_w1c;
+  wire        stat_crc_err, stat_lrc_err, stat_frame_to;
 
   // Scan CSRs
   wire        scan_en;
@@ -76,7 +79,7 @@ module top_modbus_converter #(
     .cfg_mode_master(cfg_mode_master), .cfg_parity(cfg_parity), .cfg_stop2(cfg_stop2),
     .cfg_ascii_en(cfg_ascii_en), .cfg_rtu_sil_q88(cfg_rtu_sil_q88),
     .cfg_baud_div(cfg_baud_div), .cfg_msg_wm(cfg_msg_wm), .cfg_map_base_qw_iw(cfg_map_base_qw_iw),
-    .stat_crc_err(1'b0), .stat_lrc_err(1'b0), .stat_frame_to(1'b0),
+    .stat_crc_err(stat_crc_err), .stat_lrc_err(stat_lrc_err), .stat_frame_to(stat_frame_to),
     .stat_tx_empty(1'b1), .stat_rx_avail(csr_rx_valid),
     .irq_w1c(irq_w1c),
 
@@ -95,8 +98,11 @@ module top_modbus_converter #(
   // UART bridge
   wire [7:0]  b_rx, b_tx;
   wire        b_rx_v, b_tx_v, b_tx_rdy;
-  wire        f_start, f_end, f_to;
+  wire        f_start, f_end;
+  /* verilator lint_off UNUSED */
+  wire        f_to;
   wire        e_crc, e_lrc;
+  /* verilator lint_on UNUSED */
 
   uart_bridge u_bridge(
     .clk(PCLK), .rst(rst),
@@ -117,7 +123,7 @@ module top_modbus_converter #(
     .tx_b(b_tx), .tx_b_v(b_tx_v), .tx_b_rdy(b_tx_rdy),
     .di_status(di_status),
     .do_wdata(do_wdata), .do_wmask(do_wmask), .do_we(do_we),
-    .stat_crc_err(), .stat_lrc_err(), .stat_frame_to(),
+    .stat_crc_err(stat_crc_err), .stat_lrc_err(stat_lrc_err), .stat_frame_to(stat_frame_to),
     .scan_en(scan_en), .scan_retry_max(scan_retry_max), .scan_period_ms(scan_period_ms),
     .scan_idx(scan_idx), .scan_slave(scan_slave), .scan_func(scan_func),
     .scan_start_addr(scan_start_addr), .scan_qty(scan_qty), .scan_byte_count(scan_byte_count),

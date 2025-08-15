@@ -8,7 +8,7 @@ module crc16_modbus(
   output reg  [15:0] crc_o
 );
   reg [15:0] c;
-  integer k;
+  /* verilator lint_off BLKSEQ */
   function [15:0] step;
     input [15:0] cin; input [7:0] d;
     integer i; reg [15:0] x;
@@ -22,6 +22,7 @@ module crc16_modbus(
       step = x;
     end
   endfunction
+  /* verilator lint_on BLKSEQ */
 
   always @(posedge clk) begin
     if (rst || clr) c <= 16'hFFFF;

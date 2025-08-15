@@ -33,7 +33,9 @@
 
 module csr_block #(
   parameter ADDR_WIDTH = 12,
+  /* verilator lint_off UNUSEDPARAM */
   parameter SCAN_MAX   = 16
+  /* verilator lint_on UNUSEDPARAM */
 )(
   input  wire        PCLK,
   input  wire        PRESETn,     // external async; sync internally
@@ -99,6 +101,10 @@ module csr_block #(
   output reg [15:0]  scan_wbase,
   output reg [15:0]  scan_rbase
 );
+
+  /* verilator lint_off UNUSED */
+  wire unused_paddr_bits = |PADDR[11:6] | |PADDR[1:0];
+  /* verilator lint_on UNUSED */
 
   // sync reset
   reg [1:0] rff;
