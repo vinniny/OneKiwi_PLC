@@ -68,6 +68,14 @@ The project relies on open-source EDA tooling for simulation and testing:
 * [Icarus Verilog](https://steveicarus.github.io/iverilog/) (`iverilog` and `vvp`) for compiling and running simulations
 * A POSIX-like shell environment (for example, Linux) to execute build commands
 
+## Linting
+
+Run Verilator in lint-only mode to catch width mismatches and other RTL issues before simulation:
+
+```sh
+verilator --lint-only src/*.v
+```
+
 ## Build Instructions
 
 Ensure the `build/` directory exists, then compile and run the core:
