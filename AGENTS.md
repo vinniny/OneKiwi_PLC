@@ -93,3 +93,38 @@ The design is modular, synthesis-ready for FPGA/ASIC, and follows a fully synchr
 - All modules are **parameterized** for reuse.
 - Only synchronous resets are used.
 - APB interface is AMBA 3 compliant.
+
+---
+
+## Coding Style Guidelines (Based on `csr.v` Reference)
+
+All RTL modules in this project should strictly follow the coding conventions used in `csr.v`:
+
+1. **Indentation & Formatting**
+   - Use consistent indentation (spaces, matching `csr.v` style).
+   - Align parameters, port lists, and signal declarations for readability.
+
+2. **Module Declaration**
+   - Parameter list on top, then port list.
+   - Parameters use uppercase names with default values.
+   - All ports explicitly declared with direction, type, and width.
+
+3. **Naming Conventions**
+   - Lowercase with underscores for signals and instances.
+   - Uppercase for parameters, constants, and state encodings.
+   - `_i` suffix for inputs, `_o` suffix for outputs, `_n` for active-low signals.
+
+4. **Comments**
+   - Use block comments for module descriptions.
+   - Use inline comments for important lines of code or signal meaning.
+
+5. **Reset Style**
+   - Synchronous reset only, active-high by default.
+   - All registers initialized in reset block.
+
+6. **Coding Practices**
+   - Use `localparam` for state machine encodings.
+   - Avoid hard-coded values; use parameters where possible.
+   - No inferred latches; all sequential logic inside `always @(posedge clk)`.
+
+This ensures all modules (`uart_rx.v`, `uart_tx.v`, `uart_bridge.v`, `gpio_input.v`, `gpio_output.v`, `modbus_controller.v`) remain consistent, maintainable, and synthesis-friendly.
