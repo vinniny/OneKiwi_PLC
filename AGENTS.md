@@ -135,7 +135,7 @@ This ensures all modules (`uart_rx.v`, `uart_tx.v`, `uart_bridge.v`, `gpio_input
 
 For this Modbus Converter IP Core project, both **Verilator** and **Icarus Verilog (iverilog)** are used in a complementary workflow:
 
-1. **Run Verilator lint** early to catch width mismatches, unused signals, and synthesis issues before simulation.
+1. **Run Verilator lint** early to catch width mismatches, unused signals, and synthesis issues before simulation. (`timescale only needed in testbench)
 2. **Use iverilog** to run functional simulations, especially for protocol testbenches (RTU/ASCII) and GPIO/UART verification.
 3. Maintain a single **file list** (`.f` file or Makefile variable) so both tools compile the exact same RTL set.
 4. Optionally run **Verilator simulation** for large-scale or long-run tests where speed is critical, while iverilog is preferred for mixed behavioral testbenches.
