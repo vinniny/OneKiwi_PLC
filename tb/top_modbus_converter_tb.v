@@ -96,7 +96,7 @@ module top_modbus_converter_tb;
 
     // --- Drive GPIO_DI and read DI ---
     GPIO_DI = 32'hA5A55A5A;
-    repeat (2) @(posedge PCLK);
+    repeat (3) @(posedge PCLK);
     apb_read(12'h004, rddata); if (rddata !== 32'hA5A55A5A) begin $display("ERROR: DI read %h", rddata); $finish; end
 
     // --- Timer write and verify increment ---
@@ -148,53 +148,53 @@ module top_modbus_converter_tb;
   // APB write task
   task apb_write(input [11:0] addr, input [31:0] data);
   begin
+    PADDR  = addr;
+    PWDATA = data;
+    PWRITE = 1'b1;
+    PSEL   = 1'b1;
+    PSTRB  = 4'hF;
     @(posedge PCLK);
-    PADDR  <= addr;
-    PWDATA <= data;
-    PWRITE <= 1'b1;
-    PSEL   <= 1'b1;
-    PSTRB  <= 4'hF;
-    @(posedge PCLK);
-    PENABLE <= 1'b1;
+    PENABLE = 1'b1;
     while (!PREADY) @(posedge PCLK);
-    PSEL   <= 1'b0;
-    PENABLE<= 1'b0;
-    PWRITE <= 1'b0;
+    @(posedge PCLK);
+    PSEL   = 1'b0;
+    PENABLE = 1'b0;
+    PWRITE = 1'b0;
   end
   endtask
 
   // APB masked write task
   task apb_write_masked(input [11:0] addr, input [31:0] data, input [3:0] mask);
   begin
+    PADDR  = addr;
+    PWDATA = data;
+    PWRITE = 1'b1;
+    PSEL   = 1'b1;
+    PSTRB  = mask;
     @(posedge PCLK);
-    PADDR  <= addr;
-    PWDATA <= data;
-    PWRITE <= 1'b1;
-    PSEL   <= 1'b1;
-    PSTRB  <= mask;
-    @(posedge PCLK);
-    PENABLE <= 1'b1;
+    PENABLE = 1'b1;
     while (!PREADY) @(posedge PCLK);
-    PSEL   <= 1'b0;
-    PENABLE<= 1'b0;
-    PWRITE <= 1'b0;
+    @(posedge PCLK);
+    PSEL   = 1'b0;
+    PENABLE = 1'b0;
+    PWRITE = 1'b0;
   end
   endtask
 
   // APB read task
   task apb_read(input [11:0] addr, output [31:0] data);
   begin
+    PADDR  = addr;
+    PWRITE = 1'b0;
+    PSEL   = 1'b1;
+    PSTRB  = 4'h0;
     @(posedge PCLK);
-    PADDR  <= addr;
-    PWRITE <= 1'b0;
-    PSEL   <= 1'b1;
-    PSTRB  <= 4'h0;
-    @(posedge PCLK);
-    PENABLE <= 1'b1;
+    PENABLE = 1'b1;
     while (!PREADY) @(posedge PCLK);
     data = PRDATA;
-    PSEL   <= 1'b0;
-    PENABLE<= 1'b0;
+    @(posedge PCLK);
+    PSEL   = 1'b0;
+    PENABLE = 1'b0;
   end
   endtask
 endmodule
