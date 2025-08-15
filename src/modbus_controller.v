@@ -5,7 +5,9 @@
 
 module modbus_controller #(
   parameter REG_WORDS = 64,
-  parameter SCAN_MAX  = 16
+  parameter SCAN_MAX  = 16,
+  // limit RX/TX buffer depth to keep synthesis time manageable
+  parameter BUF_MAX   = 128
 )(
   input  wire        clk,
   input  wire        rst,
@@ -57,12 +59,12 @@ module modbus_controller #(
   reg [15:0] reg_input   [0:REG_WORDS-1];
 
   // ===== RX buffer (per-frame) =====
-  reg [7:0] rx_buf [0:255];
+  (* ram_style = "block" *) reg [7:0] rx_buf [0:BUF_MAX-1];
   reg [7:0] rx_len;
   reg       rx_in_ascii;
 
   // ===== TX buffer (per-frame) =====
-  reg [7:0] tx_buf [0:255];
+  (* ram_style = "block" *) reg [7:0] tx_buf [0:BUF_MAX-1];
   reg [8:0] tx_len;
   reg [8:0] tx_idx;
 
@@ -70,7 +72,8 @@ module modbus_controller #(
   integer i,j,k,bitn,ofs,base;
   integer bytes, blen;
   reg [7:0] b, nb0, nb1, bc, sum;
-  reg [7:0] bin [0:255];          // temp for ASCII hex -> binary
+  // temp for ASCII hex -> binary
+  (* ram_style = "block" *) reg [7:0] bin [0:BUF_MAX-1];
   reg [15:0] w, c, x;
   reg [31:0] new_do, msk;
   reg        ascii_err;
@@ -103,7 +106,7 @@ module modbus_controller #(
     integer i0,j0; reg [15:0] c0; reg [7:0] d0;
     begin
       c0 = 16'hFFFF;
-      for (i0=0;i0<256;i0=i0+1) begin
+      for (i0=0;i0<BUF_MAX;i0=i0+1) begin
         if (i0 < n) begin
           d0 = rx_buf[i0[7:0]];
           for (j0=0;j0<8;j0=j0+1) begin
@@ -163,7 +166,7 @@ module modbus_controller #(
         S_COLLECT: begin
           if (rx_b_v) begin
             rx_buf[rx_len] <= rx_b;
-            if (rx_len != 8'hFF) begin
+          if (rx_len != (BUF_MAX-1)) begin
               rx_len <= rx_len + 8'd1;
             end
           end
@@ -205,10 +208,10 @@ module modbus_controller #(
             ascii_err = 1'b0;
 
             // Expect rx_buf[0] = ':' ; data from [1 .. rx_len-3], LRC at last byte before CRLF
-            for (i=1; i<253; i=i+2) begin
+            for (i=1; i<BUF_MAX-3; i=i+2) begin
               if ((i+1) < (rx_len-2)) begin
                 nb0 = hex2nib(rx_buf[i[7:0]]);
-                nb1 = hex2nib(rx_buf[(i+1) & 8'hFF]);
+                nb1 = hex2nib(rx_buf[(i+1) & (BUF_MAX-1)]);
                 if (nb0==8'hFF || nb1==8'hFF) begin
                   ascii_err = 1'b1;
                 end else begin
@@ -224,14 +227,14 @@ module modbus_controller #(
               st <= S_IDLE;
             end else begin
               // copy into rx_buf (binary)
-              for (k=0; k<256; k=k+1) begin
+              for (k=0; k<BUF_MAX; k=k+1) begin
                 if (k < blen) rx_buf[k[7:0]] = bin[k[7:0]];
               end
               rx_len = blen[7:0];
 
               // verify LRC: sum of bytes including address..data..LRC == 0
               sum = 8'h00;
-              for (k=0; k<256; k=k+1) begin
+              for (k=0; k<BUF_MAX; k=k+1) begin
                 if (k < blen) sum = sum + rx_buf[k[7:0]];
               end
 
@@ -272,7 +275,7 @@ module modbus_controller #(
                 tx_buf[tx_len[7:0]] = func;     tx_len = tx_len + 9'd1;
                 tx_buf[tx_len[7:0]] = bytes[7:0]; tx_len = tx_len + 9'd1;
 
-                for (i=0; i<256; i=i+1) begin
+                for (i=0; i<BUF_MAX; i=i+1) begin
                   if (i < bytes) begin
                     b = 8'h00;
                     for (bitn=0; bitn<8; bitn=bitn+1) begin
@@ -287,7 +290,7 @@ module modbus_controller #(
 
                 // CRC
                 c = 16'hFFFF;
-                for (j=0; j<256; j=j+1) begin
+                for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
                     x = c ^ tx_buf[j];
                     for (k=0; k<8; k=k+1) begin
@@ -321,7 +324,7 @@ module modbus_controller #(
 
                 // CRC
                 c = 16'hFFFF;
-                for (j=0; j<256; j=j+1) begin
+                for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
                     x = c ^ tx_buf[j];
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
@@ -345,7 +348,7 @@ module modbus_controller #(
                 end
 
                 c = 16'hFFFF;
-                for (j=0; j<256; j=j+1) begin
+                for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
                     x = c ^ tx_buf[j];
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
@@ -367,7 +370,7 @@ module modbus_controller #(
                 end
 
                 c = 16'hFFFF;
-                for (j=0; j<256; j=j+1) begin
+                for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
                     x = c ^ tx_buf[j];
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
@@ -407,7 +410,7 @@ module modbus_controller #(
                 tx_buf[tx_len[7:0]] = rx_buf[5]; tx_len = tx_len + 9'd1;
 
                 c = 16'hFFFF;
-                for (j=0; j<256; j=j+1) begin
+                for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
                     x = c ^ tx_buf[j];
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
@@ -438,7 +441,7 @@ module modbus_controller #(
                 tx_buf[tx_len[7:0]] = rx_buf[5]; tx_len = tx_len + 9'd1;
 
                 c = 16'hFFFF;
-                for (j=0; j<256; j=j+1) begin
+                for (j=0; j<BUF_MAX; j=j+1) begin
                   if (j < tx_len) begin
                     x = c ^ tx_buf[j];
                     for (k=0; k<8; k=k+1) x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
