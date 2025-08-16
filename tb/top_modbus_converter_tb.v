@@ -25,6 +25,12 @@ module top_modbus_converter_tb;
   reg  [31:0] GPIO_DI;
   wire [31:0] GPIO_DO;
 
+  // Debug signals to observe Modbus controller behavior
+  wire [31:0] dbg_do_wdata;
+  wire [31:0] dbg_do_wmask;
+  wire        dbg_do_we;
+  wire        dbg_crc_err;
+
   // Instantiate top-level DUT
   top_modbus_converter dut(
     .PCLK(PCLK),
@@ -43,6 +49,11 @@ module top_modbus_converter_tb;
     .GPIO_DI(GPIO_DI),
     .GPIO_DO(GPIO_DO)
   );
+
+  assign dbg_do_wdata = dut.do_wdata;
+  assign dbg_do_wmask = dut.do_wmask;
+  assign dbg_do_we    = dut.do_we;
+  assign dbg_crc_err  = dut.stat_crc_err;
 
   // Generate 100 MHz clock
   initial PCLK = 0;
@@ -225,24 +236,43 @@ module top_modbus_converter_tb;
 
   // Full system Modbus frame to drive GPIO
   task test_full_system_modbus;
+  reg saw_we;
   begin
     // Switch to slave mode so DUT responds to incoming frames
     apb_write(12'h010, 32'h0000_0000);
 
+    // Ensure idle time before frame start (3.5 chars)
+    for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
+
+    // Send Modbus write-single-coil frame
     uart_send_byte_dut(8'h01); // addr
     uart_send_byte_dut(8'h05); // write single coil
-    uart_send_byte_dut(8'h00);
-    uart_send_byte_dut(8'h00);
-    uart_send_byte_dut(8'hFF);
-    uart_send_byte_dut(8'h00);
-    uart_send_byte_dut(8'h8C);
-    uart_send_byte_dut(8'h3A);
+    uart_send_byte_dut(8'h00); // coil high
+    uart_send_byte_dut(8'h00); // coil low
+    uart_send_byte_dut(8'hFF); // data high
+    uart_send_byte_dut(8'h00); // data low
+    uart_send_byte_dut(8'h8C); // CRC lo
+    uart_send_byte_dut(8'h3A); // CRC hi
 
-    for (i=0; i<bit_cycles*200; i=i+1) @(posedge PCLK);
+    // Wait for controller write strobe or timeout
+    saw_we = 1'b0;
+    for (i=0; i<bit_cycles*300; i=i+1) begin
+      @(posedge PCLK);
+      if (dbg_do_we && !saw_we) begin
+        $display("do_we asserted: mask=%h data=%h", dbg_do_wmask, dbg_do_wdata);
+        saw_we = 1'b1;
+      end
+    end
+    if (!saw_we)
+      $display("ERROR: controller never issued do_we (crc_err=%b)", dbg_crc_err);
+
+    // Read back DO register and check GPIO
+    apb_read(12'h000, rddata);
+    $display("DO register readback = %h", rddata);
+    if (rddata[0] !== 1'b1)
+      $display("ERROR: DO register bit0 not set");
     if (GPIO_DO[0] !== 1'b1)
-      $display("WARNING: GPIO_DO not updated by Modbus write");
-    else
-      $display("GPIO_DO updated by Modbus write");
+      $display("ERROR: GPIO_DO not updated by Modbus write");
   end
   endtask
 
