@@ -392,15 +392,26 @@ module top_modbus_converter_tb;
   // UART receive byte from DUT
   task uart_recv_byte_dut(output [7:0] data);
     integer bitn, cyc;
+    integer timeout;
     begin
-      @(negedge UART_TX);
-      for (cyc=0; cyc<bit_cycles+half_bit_cycles; cyc=cyc+1) @(posedge PCLK);
-      data[0] = UART_TX;
-      for (bitn=1; bitn<8; bitn=bitn+1) begin
-        for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
-        data[bitn] = UART_TX;
+      // Wait for start bit but bail out if it never arrives
+      timeout = bit_cycles*1000;
+      while (UART_TX == 1'b1 && timeout > 0) begin
+        @(posedge PCLK);
+        timeout = timeout - 1;
       end
-      for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+      if (UART_TX == 1'b1) begin
+        $display("ERROR: uart_recv_byte_dut timeout waiting for start bit");
+        data = 8'h00;
+      end else begin
+        for (cyc=0; cyc<bit_cycles+half_bit_cycles; cyc=cyc+1) @(posedge PCLK);
+        data[0] = UART_TX;
+        for (bitn=1; bitn<8; bitn=bitn+1) begin
+          for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+          data[bitn] = UART_TX;
+        end
+        for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+      end
     end
   endtask
 
