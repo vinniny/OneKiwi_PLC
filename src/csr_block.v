@@ -53,6 +53,9 @@ module csr_block #(
   // DO/DI
   input  wire [31:0] di_status_in,
   output reg  [31:0] do_control_out,
+  input  wire [31:0] do_wdata_ext,
+  input  wire [31:0] do_wmask_ext,
+  input  wire        do_we_ext,
 
   // Timer
   output      [31:0] timer_cnt,
@@ -206,10 +209,13 @@ assign timer_cnt = reg02_timer;
         tx_push <= 1'b0;
         rx_pop  <= 1'b0;
 
+      if (do_we_ext)
+        reg00_do <= (reg00_do & ~do_wmask_ext) | (do_wdata_ext & do_wmask_ext);
+
       if (wr) begin
         case (PADDR[5:2])
           4'h0: reg00_do <= wb(reg00_do, PWDATA, PSTRB);
-         
+
             4'h3: if (tx_ready) begin
               tx_data <= PWDATA[7:0];
               tx_push <= 1'b1;
