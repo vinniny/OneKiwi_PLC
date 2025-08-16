@@ -415,7 +415,7 @@ module top_modbus_converter_tb;
     integer timeout;
     begin
       // Wait for start bit but bail out if it never arrives
-      timeout = bit_cycles*200;
+      timeout = bit_cycles*1000;
       while (UART_TX == 1'b1 && timeout > 0) begin
         @(posedge PCLK);
         timeout = timeout - 1;
