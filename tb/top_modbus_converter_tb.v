@@ -106,7 +106,7 @@ module top_modbus_converter_tb;
   reg [31:0] rddata, rddata2;
   integer    bit_cycles, half_bit_cycles;
   integer    i;
-  reg [7:0]  b0, b1, b2, b3, b4, b5;
+  reg [7:0]  b0, b1, b2, b3, b4, b5, b6, b7;
 
   // Main test sequence
   initial begin
@@ -191,9 +191,9 @@ module top_modbus_converter_tb;
     apb_read(12'h008, rddata2); if (rddata2 <= rddata) begin $display("ERROR: Timer did not increment %h -> %h", rddata, rddata2); $finish; end
 
     // --- Configuration register writes ---
-    apb_write(12'h010, 32'h0001_0000);
+    apb_write(12'h010, 32'h0000_0000);
     apb_write(12'h014, 32'h0080_0036);
-    apb_read(12'h010, rddata); if (rddata !== 32'h0001_0000) begin $display("ERROR: CFG0 mismatch %h", rddata); $finish; end
+    apb_read(12'h010, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: CFG0 mismatch %h", rddata); $finish; end
     apb_read(12'h014, rddata); if (rddata !== 32'h0080_0036) begin $display("ERROR: CFG1 mismatch %h", rddata); $finish; end
     bit_cycles      = rddata[15:0] * 16;
     half_bit_cycles = bit_cycles / 2;
@@ -240,7 +240,7 @@ module top_modbus_converter_tb;
   reg saw_we;
   begin
     // Switch to slave mode so DUT responds to incoming frames
-    apb_write(12'h010, 32'h0000_0000);
+    apb_write(12'h010, 32'h0001_0000);
 
     // Clear DO register so Modbus write has known starting point
     apb_write(12'h000, 32'h0000_0000);
@@ -270,6 +270,23 @@ module top_modbus_converter_tb;
     if (!saw_we)
       $display("ERROR: controller never issued do_we (crc_err=%b)", dbg_crc_err);
 
+    // Consume slave ACK to ensure response completed
+    uart_recv_byte_dut(b0);
+    uart_recv_byte_dut(b1);
+    uart_recv_byte_dut(b2);
+    uart_recv_byte_dut(b3);
+    uart_recv_byte_dut(b4);
+    uart_recv_byte_dut(b5);
+    uart_recv_byte_dut(b6);
+    uart_recv_byte_dut(b7);
+    if (b0!==8'h01 || b1!==8'h05 || b2!==8'h00 || b3!==8'h00 ||
+        b4!==8'hFF || b5!==8'h00 || b6!==8'h8C || b7!==8'h3A)
+      $display("ERROR: Write coil resp %h %h %h %h %h %h %h %h",
+               b0,b1,b2,b3,b4,b5,b6,b7);
+
+    // Ensure idle time before next request (>=3.5 char)
+    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
+
     // Read back DO register and check GPIO
     apb_read(12'h000, rddata);
     $display("DO register readback = %h", rddata);
@@ -279,7 +296,7 @@ module top_modbus_converter_tb;
       $display("ERROR: GPIO_DO not updated by Modbus write");
 
     // --- Read coils via Modbus to verify DO state ---
-    for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
+    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
     uart_send_byte_dut(8'h01); // addr
     uart_send_byte_dut(8'h01); // read coils
     uart_send_byte_dut(8'h00); // start hi
@@ -297,10 +314,13 @@ module top_modbus_converter_tb;
     if (b0!==8'h01 || b1!==8'h01 || b2!==8'h01 || b3[0]!==1'b1 || b4!==8'h90 || b5!==8'h48)
       $display("ERROR: Read coils resp %h %h %h %h %h %h", b0,b1,b2,b3,b4,b5);
 
+    // Gap before next request
+    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
+
     // --- Drive GPIO_DI and read back via Modbus ---
     GPIO_DI = 32'h0000_0001;
     repeat (3) @(posedge PCLK);
-    for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
+    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
     uart_send_byte_dut(8'h01); // addr
     uart_send_byte_dut(8'h02); // read discrete inputs
     uart_send_byte_dut(8'h00); // start hi
