@@ -106,6 +106,7 @@ module top_modbus_converter_tb;
   reg [31:0] rddata, rddata2;
   integer    bit_cycles, half_bit_cycles;
   integer    i;
+  reg [7:0]  b0, b1, b2, b3, b4, b5;
 
   // Main test sequence
   initial begin
@@ -241,6 +242,9 @@ module top_modbus_converter_tb;
     // Switch to slave mode so DUT responds to incoming frames
     apb_write(12'h010, 32'h0000_0000);
 
+    // Clear DO register so Modbus write has known starting point
+    apb_write(12'h000, 32'h0000_0000);
+
     // Ensure idle time before frame start (3.5 chars)
     for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
 
@@ -273,6 +277,46 @@ module top_modbus_converter_tb;
       $display("ERROR: DO register bit0 not set");
     if (GPIO_DO[0] !== 1'b1)
       $display("ERROR: GPIO_DO not updated by Modbus write");
+
+    // --- Read coils via Modbus to verify DO state ---
+    for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
+    uart_send_byte_dut(8'h01); // addr
+    uart_send_byte_dut(8'h01); // read coils
+    uart_send_byte_dut(8'h00); // start hi
+    uart_send_byte_dut(8'h00); // start lo
+    uart_send_byte_dut(8'h00); // qty hi
+    uart_send_byte_dut(8'h01); // qty lo
+    uart_send_byte_dut(8'hFD); // CRC lo
+    uart_send_byte_dut(8'hCA); // CRC hi
+    uart_recv_byte_dut(b0);
+    uart_recv_byte_dut(b1);
+    uart_recv_byte_dut(b2);
+    uart_recv_byte_dut(b3);
+    uart_recv_byte_dut(b4);
+    uart_recv_byte_dut(b5);
+    if (b0!==8'h01 || b1!==8'h01 || b2!==8'h01 || b3[0]!==1'b1 || b4!==8'h90 || b5!==8'h48)
+      $display("ERROR: Read coils resp %h %h %h %h %h %h", b0,b1,b2,b3,b4,b5);
+
+    // --- Drive GPIO_DI and read back via Modbus ---
+    GPIO_DI = 32'h0000_0001;
+    repeat (3) @(posedge PCLK);
+    for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
+    uart_send_byte_dut(8'h01); // addr
+    uart_send_byte_dut(8'h02); // read discrete inputs
+    uart_send_byte_dut(8'h00); // start hi
+    uart_send_byte_dut(8'h00); // start lo
+    uart_send_byte_dut(8'h00); // qty hi
+    uart_send_byte_dut(8'h01); // qty lo
+    uart_send_byte_dut(8'hB9); // CRC lo
+    uart_send_byte_dut(8'hCA); // CRC hi
+    uart_recv_byte_dut(b0);
+    uart_recv_byte_dut(b1);
+    uart_recv_byte_dut(b2);
+    uart_recv_byte_dut(b3);
+    uart_recv_byte_dut(b4);
+    uart_recv_byte_dut(b5);
+    if (b0!==8'h01 || b1!==8'h02 || b2!==8'h01 || b3[0]!==1'b1 || b4!==8'h60 || b5!==8'h48)
+      $display("ERROR: Read DI resp %h %h %h %h %h %h", b0,b1,b2,b3,b4,b5);
   end
   endtask
 
@@ -341,6 +385,21 @@ module top_modbus_converter_tb;
         for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
       end
       UART_RX = 1'b1;
+      for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+    end
+  endtask
+
+  // UART receive byte from DUT
+  task uart_recv_byte_dut(output [7:0] data);
+    integer bitn, cyc;
+    begin
+      @(negedge UART_TX);
+      for (cyc=0; cyc<bit_cycles+half_bit_cycles; cyc=cyc+1) @(posedge PCLK);
+      data[0] = UART_TX;
+      for (bitn=1; bitn<8; bitn=bitn+1) begin
+        for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+        data[bitn] = UART_TX;
+      end
       for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
     end
   endtask
