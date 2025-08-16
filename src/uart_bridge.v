@@ -73,6 +73,8 @@ module uart_bridge #(
   // char_bits ≈ 10 + parity + stop2
   // Cast parity/stop flags to 4 bits to avoid width expansion warnings
   wire [3:0] char_bits = 4'd10 + (parity!=2'd0 ? 4'd1 : 4'd0) + (stop2 ? 4'd1 : 4'd0);
+  // Treat a zero configuration as 3.5 characters to avoid premature frame_end
+  wire [15:0] rtu_sil = (rtu_sil_q88 == 16'd0) ? 16'd896 : rtu_sil_q88;
   reg  [23:0] sil_cnt;
   reg         in_frame;
 
@@ -105,7 +107,7 @@ module uart_bridge #(
           rx_data_o <= rxd;
           rx_valid_o <= 1'b1;
         end else if (in_frame) begin
-          if (sil_cnt < ({rtu_sil_q88,8'd0} * char_bits))
+          if (sil_cnt < ({rtu_sil,8'd0} * char_bits))
             sil_cnt <= sil_cnt + {8'd0, baud_div};
           else begin
             in_frame <= 1'b0;

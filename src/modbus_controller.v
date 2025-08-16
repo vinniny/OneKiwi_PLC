@@ -57,6 +57,9 @@ module modbus_controller #(
   output reg  [15:0] scan_err_count
 );
 
+  // Delay line for GPIO write enable to align with data
+  reg do_we_d;
+
   /* verilator lint_off UNUSED */
   wire unused_scan_inputs;
   assign unused_scan_inputs = scan_en |
@@ -169,6 +172,7 @@ module modbus_controller #(
       tx_b_v <= 1'b0;
 
       do_we    <= 1'b0;
+      do_we_d  <= 1'b0;
       do_wmask <= 32'd0;
       do_wdata <= 32'd0;
 
@@ -181,7 +185,8 @@ module modbus_controller #(
       rx_in_ascii <= 1'b0;
     end else begin
       tx_b_v <= 1'b0;
-      do_we  <= 1'b0;
+      do_we  <= do_we_d;
+      do_we_d <= 1'b0;
       scan_cycles_done <= 16'd0;
       scan_err_count   <= 16'd0;
 
@@ -223,21 +228,22 @@ module modbus_controller #(
               dev_addr <= rx_buf[0];
               func     <= rx_buf[1];
               // validate CRC over bytes [0 .. rx_len-3]
-              // CRC is transmitted low byte first
-              if (crc16_sw(rx_len-2) != {rx_buf[rx_len-2], rx_buf[rx_len-1]}) begin
+              // CRC is transmitted low byte first in the frame
+              if (crc16_sw(rx_len-2) != {rx_buf[rx_len-1], rx_buf[rx_len-2]}) begin
                 stat_crc_err <= 1'b1;
                 st <= S_IDLE;
               end else begin
-                // parse common fields if present
+                // parse common fields using immediate buffer values
                 addr <= {rx_buf[2], rx_buf[3]};
-                if (func==8'h01 || func==8'h02 || func==8'h03 || func==8'h04) begin
-                  qty <= {rx_buf[4], rx_buf[5]};
-                end else if (func==8'h05 || func==8'h06) begin
-                  val <= {rx_buf[4], rx_buf[5]};
-                end else if (func==8'h0F || func==8'h10) begin
-                  qty        <= {rx_buf[4], rx_buf[5]};
-                  byte_count <= rx_buf[6];
-                end
+                case (rx_buf[1])
+                  8'h01,8'h02,8'h03,8'h04: qty <= {rx_buf[4], rx_buf[5]};
+                  8'h05,8'h06:             val <= {rx_buf[4], rx_buf[5]};
+                  8'h0F,8'h10: begin
+                    qty        <= {rx_buf[4], rx_buf[5]};
+                    byte_count <= rx_buf[6];
+                  end
+                  default: ;
+                endcase
                 st <= S_EXEC;
               end
             end
@@ -406,7 +412,7 @@ module modbus_controller #(
                 // write single coil: echo request
                 do_wmask <= (32'h1 << addr[4:0]);
                 do_wdata <= (val==16'hFF00) ? (32'h1 << addr[4:0]) : 32'h0;
-                do_we    <= 1'b1;
+                do_we_d  <= 1'b1;
 
                 tx_wr   = 0;
                 for (j=0; j<6; j=j+1) begin
@@ -478,7 +484,7 @@ module modbus_controller #(
                   end
                 do_wmask <= msk;
                 do_wdata <= new_do;
-                do_we    <= 1'b1;
+                do_we_d  <= 1'b1;
 
                 // Response: echo addr func start qty
                 tx_wr   = 0;
