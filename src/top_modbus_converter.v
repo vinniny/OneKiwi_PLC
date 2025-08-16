@@ -84,6 +84,7 @@ module top_modbus_converter #(
     .PADDR(PADDR), .PSEL(PSEL), .PENABLE(PENABLE), .PWRITE(PWRITE),
     .PWDATA(PWDATA), .PSTRB(PSTRB), .PRDATA(PRDATA), .PREADY(PREADY), .PSLVERR(PSLVERR),
     .di_status_in(di_status), .do_control_out(do_control),
+    .do_wdata_ext(do_wdata), .do_wmask_ext(do_wmask), .do_we_ext(do_we),
     .timer_cnt(timer_cnt),
     .rx_data(csr_rx_data), .rx_valid(csr_rx_valid), .rx_pop(csr_rx_pop),
     .tx_data(csr_tx_data), .tx_push(csr_tx_push), .tx_ready(csr_tx_ready),
