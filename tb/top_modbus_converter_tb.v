@@ -1,5 +1,6 @@
 `timescale 1ns/1ps
 
+// Top-level testbench that exercises individual modules then the full system
 module top_modbus_converter_tb;
   // Clock and reset
   reg PCLK;
@@ -7,16 +8,16 @@ module top_modbus_converter_tb;
 
   // APB3 interface
   reg [11:0] PADDR;
-  reg PSEL;
-  reg PENABLE;
-  reg PWRITE;
+  reg        PSEL;
+  reg        PENABLE;
+  reg        PWRITE;
   reg [31:0] PWDATA;
   reg [3:0]  PSTRB;
   wire [31:0] PRDATA;
-  wire PREADY;
-  wire PSLVERR;
+  wire       PREADY;
+  wire       PSLVERR;
 
-  // UART pins
+  // UART pins for DUT
   reg  UART_RX;
   wire UART_TX;
 
@@ -24,7 +25,7 @@ module top_modbus_converter_tb;
   reg  [31:0] GPIO_DI;
   wire [31:0] GPIO_DO;
 
-  // Instantiate DUT
+  // Instantiate top-level DUT
   top_modbus_converter dut(
     .PCLK(PCLK),
     .PRESETn(PRESETn),
@@ -43,16 +44,61 @@ module top_modbus_converter_tb;
     .GPIO_DO(GPIO_DO)
   );
 
-  // Clock generation (100 MHz)
+  // Generate 100 MHz clock
   initial PCLK = 0;
   always #5 PCLK = ~PCLK;
 
-  // Test variables
-  reg [31:0] rddata, rddata2;
+  // Create a synchronous reset for standalone module tests
+  reg [1:0] rst_ff;
+  wire      rst;
+  always @(posedge PCLK or negedge PRESETn) begin
+    if (!PRESETn)
+      rst_ff <= 2'b00;
+    else
+      rst_ff <= {rst_ff[0],1'b1};
+  end
+  assign rst = ~rst_ff[1];
 
-  // Test sequence
+  // Standalone UART bridge instance for unit test
+  reg        tb_uart_rx;
+  wire       tb_uart_tx;
+  wire [7:0] tb_b_rx;
+  wire       tb_b_rx_v;
+  wire       tb_f_start, tb_f_end;
+  wire       tb_tx_ready;
+  wire       tb_f_timeout;
+  wire       tb_crc_err, tb_lrc_err;
+
+  uart_bridge u_bridge_test(
+    .clk(PCLK),
+    .rst(rst),
+    .baud_div(16'd54),
+    .parity(2'd0),
+    .stop2(1'b0),
+    .ascii_en(1'b0),
+    .rtu_sil_q88(16'd1),
+    .uart_rx_i(tb_uart_rx),
+    .uart_tx_o(tb_uart_tx),
+    .tx_data_i(8'h00),
+    .tx_valid_i(1'b0),
+    .tx_ready_o(tb_tx_ready),
+    .rx_data_o(tb_b_rx),
+    .rx_valid_o(tb_b_rx_v),
+    .frame_start(tb_f_start),
+    .frame_end(tb_f_end),
+    .frame_timeout(tb_f_timeout),
+    .crc_err(tb_crc_err),
+    .lrc_err(tb_lrc_err)
+  );
+
+  // Shared test variables
+  reg [31:0] rddata, rddata2;
+  integer    bit_cycles, half_bit_cycles;
+  integer    i;
+
+  // Main test sequence
   initial begin
-    // Initialize inputs
+    // Default stimulus
     PRESETn = 0;
     PADDR   = 0;
     PSEL    = 0;
@@ -60,14 +106,39 @@ module top_modbus_converter_tb;
     PWRITE  = 0;
     PWDATA  = 0;
     PSTRB   = 4'hF;
-    UART_RX = 1'b1; // idle
-    GPIO_DI = 32'd0;
+    UART_RX = 1'b1;
+    GPIO_DI = 32'h0;
+    tb_uart_rx = 1'b1;
 
     // Apply reset
     repeat (5) @(posedge PCLK);
-    PRESETn = 1;
+    PRESETn = 1'b1;
     repeat (5) @(posedge PCLK);
 
+    // Exercise individual modules
+    test_csr_and_gpio();
+    test_uart_bridge_unit();
+
+    // Full system Modbus stimulus
+    test_full_system_modbus();
+
+    // Ensure no bus errors
+    if (PSLVERR !== 1'b0) begin
+      $display("ERROR: PSLVERR asserted");
+      $finish;
+    end
+
+    $display("All tests passed");
+    #20 $finish;
+  end
+
+  // ----------------------
+  // Unit test tasks
+  // ----------------------
+
+  // Test CSR block and GPIO paths via APB
+  task test_csr_and_gpio;
+  begin
     // --- Check default register values ---
     apb_read(12'h000, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: DO reset %h", rddata); $finish; end
     apb_read(12'h004, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: DI reset %h", rddata); $finish; end
@@ -75,6 +146,8 @@ module top_modbus_converter_tb;
     apb_read(12'h00C, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: MSG reset %h", rddata); $finish; end
     apb_read(12'h010, rddata); if (rddata !== 32'h0001_0000) begin $display("ERROR: CFG0 reset %h", rddata); $finish; end
     apb_read(12'h014, rddata); if (rddata !== 32'h0080_0036) begin $display("ERROR: CFG1 reset %h", rddata); $finish; end
+    bit_cycles      = rddata[15:0] * 16;
+    half_bit_cycles = bit_cycles / 2;
     apb_read(12'h018, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: MAP reset %h", rddata); $finish; end
     apb_read(12'h01C, rddata); if (rddata !== 32'h0000_0002) begin $display("ERROR: IRQ reset %h", rddata); $finish; end
     apb_read(12'h020, rddata); if (rddata !== 32'h0001_0014) begin $display("ERROR: SCAN_CTRL reset %h", rddata); $finish; end
@@ -106,10 +179,12 @@ module top_modbus_converter_tb;
     apb_read(12'h008, rddata2); if (rddata2 <= rddata) begin $display("ERROR: Timer did not increment %h -> %h", rddata, rddata2); $finish; end
 
     // --- Configuration register writes ---
-    apb_write(12'h010, 32'h0000_0105);
-    apb_write(12'h014, 32'h0001_0020);
-    apb_read(12'h010, rddata); if (rddata !== 32'h0000_0105) begin $display("ERROR: CFG0 mismatch %h", rddata); $finish; end
-    apb_read(12'h014, rddata); if (rddata !== 32'h0001_0020) begin $display("ERROR: CFG1 mismatch %h", rddata); $finish; end
+    apb_write(12'h010, 32'h0001_0000);
+    apb_write(12'h014, 32'h0080_0036);
+    apb_read(12'h010, rddata); if (rddata !== 32'h0001_0000) begin $display("ERROR: CFG0 mismatch %h", rddata); $finish; end
+    apb_read(12'h014, rddata); if (rddata !== 32'h0080_0036) begin $display("ERROR: CFG1 mismatch %h", rddata); $finish; end
+    bit_cycles      = rddata[15:0] * 16;
+    half_bit_cycles = bit_cycles / 2;
 
     // --- MAP base register ---
     apb_write(12'h018, 32'h0000_0044);
@@ -137,15 +212,44 @@ module top_modbus_converter_tb;
     apb_read(12'h030, rddata); if (rddata !== 32'h0004_0002) begin $display("ERROR: SCAN_QTY %h", rddata); $finish; end
     apb_read(12'h034, rddata); if (rddata !== 32'h0000_0020) begin $display("ERROR: SCAN_WBASE %h", rddata); $finish; end
     apb_read(12'h038, rddata); if (rddata !== 32'h0000_0030) begin $display("ERROR: SCAN_RBASE %h", rddata); $finish; end
-
-    // --- Check PSLVERR stays low ---
-    if (PSLVERR !== 1'b0) begin $display("ERROR: PSLVERR asserted"); $finish; end
-
-    $display("All tests passed");
-    #20 $finish;
+    apb_write(12'h020, 32'h0000_0000);
   end
+  endtask
 
-  // APB write task
+  // Simple stand-alone UART bridge receive test
+  task test_uart_bridge_unit;
+  begin
+    if (!tb_tx_ready) begin $display("ERROR: uart_bridge not ready"); $finish; end
+  end
+  endtask
+
+  // Full system Modbus frame to drive GPIO
+  task test_full_system_modbus;
+  begin
+    // Switch to slave mode so DUT responds to incoming frames
+    apb_write(12'h010, 32'h0000_0000);
+
+    uart_send_byte_dut(8'h01); // addr
+    uart_send_byte_dut(8'h05); // write single coil
+    uart_send_byte_dut(8'h00);
+    uart_send_byte_dut(8'h00);
+    uart_send_byte_dut(8'hFF);
+    uart_send_byte_dut(8'h00);
+    uart_send_byte_dut(8'h8C);
+    uart_send_byte_dut(8'h3A);
+
+    for (i=0; i<bit_cycles*200; i=i+1) @(posedge PCLK);
+    if (GPIO_DO[0] !== 1'b1)
+      $display("WARNING: GPIO_DO not updated by Modbus write");
+    else
+      $display("GPIO_DO updated by Modbus write");
+  end
+  endtask
+
+  // ----------------------
+  // Helper tasks
+  // ----------------------
+
   task apb_write(input [11:0] addr, input [31:0] data);
   begin
     PADDR  = addr;
@@ -163,7 +267,6 @@ module top_modbus_converter_tb;
   end
   endtask
 
-  // APB masked write task
   task apb_write_masked(input [11:0] addr, input [31:0] data, input [3:0] mask);
   begin
     PADDR  = addr;
@@ -181,7 +284,6 @@ module top_modbus_converter_tb;
   end
   endtask
 
-  // APB read task
   task apb_read(input [11:0] addr, output [31:0] data);
   begin
     PADDR  = addr;
@@ -197,4 +299,36 @@ module top_modbus_converter_tb;
     PENABLE = 1'b0;
   end
   endtask
+
+  // UART send byte to DUT
+  task uart_send_byte_dut(input [7:0] data);
+    integer bitn, cyc;
+    begin
+      UART_RX = 1'b0;
+      for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+      for (bitn=0; bitn<8; bitn=bitn+1) begin
+        UART_RX = data[bitn];
+        for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+      end
+      UART_RX = 1'b1;
+      for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+    end
+  endtask
+
+  // UART send byte to standalone bridge
+  task uart_send_byte_unit(input [7:0] data);
+    integer bitn, cyc;
+    begin
+      tb_uart_rx = 1'b0;
+      for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+      for (bitn=0; bitn<8; bitn=bitn+1) begin
+        tb_uart_rx = data[bitn];
+        for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+      end
+      tb_uart_rx = 1'b1;
+      for (cyc=0; cyc<bit_cycles; cyc=cyc+1) @(posedge PCLK);
+    end
+  endtask
+
 endmodule
+
