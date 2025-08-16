@@ -191,6 +191,11 @@ module modbus_controller #(
           rx_len <= 8'd0;
           if (frame_start) begin
             rx_in_ascii <= cfg_ascii_en;
+            // Capture first byte when frame begins
+            if (rx_b_v) begin
+              rx_buf[8'd0] <= rx_b;
+              rx_len       <= 8'd1;
+            end
             st <= S_COLLECT;
           end
         end
@@ -217,8 +222,9 @@ module modbus_controller #(
             end else begin
               dev_addr <= rx_buf[0];
               func     <= rx_buf[1];
-              // validate CRC over 0..rx_len-3
-              if (crc16_sw(rx_len-2) != {rx_buf[rx_len-1], rx_buf[rx_len-2]}) begin
+              // validate CRC over bytes [0 .. rx_len-3]
+              // CRC is transmitted low byte first
+              if (crc16_sw(rx_len-2) != {rx_buf[rx_len-2], rx_buf[rx_len-1]}) begin
                 stat_crc_err <= 1'b1;
                 st <= S_IDLE;
               end else begin
