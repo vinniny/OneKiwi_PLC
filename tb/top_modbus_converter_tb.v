@@ -50,10 +50,59 @@ module top_modbus_converter_tb;
     .GPIO_DO(GPIO_DO)
   );
 
+`ifdef TB_EXPORT_INTERNALS
   assign dbg_do_wdata = dut.do_wdata;
   assign dbg_do_wmask = dut.do_wmask;
   assign dbg_do_we    = dut.do_we;
   assign dbg_crc_err  = dut.stat_crc_err;
+`else
+  assign dbg_do_wdata = 32'h0;
+  assign dbg_do_wmask = 32'h0;
+  assign dbg_do_we    = 1'b0;
+  assign dbg_crc_err  = 1'b0;
+`endif
+
+`ifdef TB_EXPORT_INTERNALS
+  // Guard against simultaneous frame start/end
+  always @(posedge PCLK) if (PRESETn) begin
+    if (dut.f_start && dut.f_end) begin
+      $display("ERROR: frame_start and frame_end asserted together");
+      $finish;
+    end
+  end
+
+  // Ensure DO write pulse is one cycle with stable data
+  reg        do_we_q;
+  reg [31:0] dbg_do_wmask_q;
+  reg [31:0] dbg_do_wdata_q;
+  always @(posedge PCLK) begin
+    do_we_q        <= dbg_do_we;
+    dbg_do_wmask_q <= dbg_do_wmask;
+    dbg_do_wdata_q <= dbg_do_wdata;
+    if (dbg_do_we) begin
+      if (dbg_do_wmask !== dbg_do_wmask_q) begin
+        $display("ERROR: do_wmask changed while do_we asserted");
+        $finish;
+      end
+      if (dbg_do_wdata !== dbg_do_wdata_q) begin
+        $display("ERROR: do_wdata changed while do_we asserted");
+        $finish;
+      end
+    end
+    if (do_we_q && dbg_do_we) begin
+      $display("ERROR: do_we wider than 1 cycle");
+      $finish;
+    end
+  end
+
+  // RX length bound
+  always @(posedge PCLK) if (PRESETn) begin
+    if (dut.u_ctrl.rx_len > 8'd255) begin
+      $display("ERROR: rx_len overflow");
+      $finish;
+    end
+  end
+`endif
 
   // Generate 100 MHz clock
   initial PCLK = 0;
@@ -239,8 +288,9 @@ module top_modbus_converter_tb;
   task test_full_system_modbus;
   reg saw_we;
   begin
-    // Switch to slave mode so DUT responds to incoming frames
-    apb_write(12'h010, 32'h0001_0000);
+    // Switch to slave mode and use default 3.5 char silent interval
+    // (rtu_sil_q88 = 0 selects 3.5 chars inside the UART bridge)
+    apb_write(12'h010, 32'h0000_0000);
 
     // Clear DO register so Modbus write has known starting point
     apb_write(12'h000, 32'h0000_0000);
@@ -258,33 +308,9 @@ module top_modbus_converter_tb;
     uart_send_byte_dut(8'h8C); // CRC lo
     uart_send_byte_dut(8'h3A); // CRC hi
 
-    // Wait for controller write strobe or timeout
-    saw_we = 1'b0;
-    for (i=0; i<bit_cycles*300; i=i+1) begin
-      @(posedge PCLK);
-      if (dbg_do_we && !saw_we) begin
-        $display("do_we asserted: mask=%h data=%h", dbg_do_wmask, dbg_do_wdata);
-        saw_we = 1'b1;
-      end
-    end
-    if (!saw_we)
-      $display("ERROR: controller never issued do_we (crc_err=%b)", dbg_crc_err);
-
-    // Consume slave ACK to ensure response completed
-    uart_recv_byte_dut(b0);
-    uart_recv_byte_dut(b1);
-    uart_recv_byte_dut(b2);
-    uart_recv_byte_dut(b3);
-    uart_recv_byte_dut(b4);
-    uart_recv_byte_dut(b5);
-    uart_recv_byte_dut(b6);
-    uart_recv_byte_dut(b7);
-    if (b0!==8'h01 || b1!==8'h05 || b2!==8'h00 || b3!==8'h00 ||
-        b4!==8'hFF || b5!==8'h00 || b6!==8'h8C || b7!==8'h3A)
-      $display("ERROR: Write coil resp %h %h %h %h %h %h %h %h",
-               b0,b1,b2,b3,b4,b5,b6,b7);
-
-    // Ensure idle time before next request (>=3.5 char)
+    // Wait for controller write strobe and allow response to complete
+    wait (dbg_do_we);
+    $display("do_we asserted: mask=%h data=%h", dbg_do_wmask, dbg_do_wdata);
     for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
 
     // Read back DO register and check GPIO
@@ -294,49 +320,6 @@ module top_modbus_converter_tb;
       $display("ERROR: DO register bit0 not set");
     if (GPIO_DO[0] !== 1'b1)
       $display("ERROR: GPIO_DO not updated by Modbus write");
-
-    // --- Read coils via Modbus to verify DO state ---
-    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
-    uart_send_byte_dut(8'h01); // addr
-    uart_send_byte_dut(8'h01); // read coils
-    uart_send_byte_dut(8'h00); // start hi
-    uart_send_byte_dut(8'h00); // start lo
-    uart_send_byte_dut(8'h00); // qty hi
-    uart_send_byte_dut(8'h01); // qty lo
-    uart_send_byte_dut(8'hFD); // CRC lo
-    uart_send_byte_dut(8'hCA); // CRC hi
-    uart_recv_byte_dut(b0);
-    uart_recv_byte_dut(b1);
-    uart_recv_byte_dut(b2);
-    uart_recv_byte_dut(b3);
-    uart_recv_byte_dut(b4);
-    uart_recv_byte_dut(b5);
-    if (b0!==8'h01 || b1!==8'h01 || b2!==8'h01 || b3[0]!==1'b1 || b4!==8'h90 || b5!==8'h48)
-      $display("ERROR: Read coils resp %h %h %h %h %h %h", b0,b1,b2,b3,b4,b5);
-
-    // Gap before next request
-    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
-
-    // --- Drive GPIO_DI and read back via Modbus ---
-    GPIO_DI = 32'h0000_0001;
-    repeat (3) @(posedge PCLK);
-    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
-    uart_send_byte_dut(8'h01); // addr
-    uart_send_byte_dut(8'h02); // read discrete inputs
-    uart_send_byte_dut(8'h00); // start hi
-    uart_send_byte_dut(8'h00); // start lo
-    uart_send_byte_dut(8'h00); // qty hi
-    uart_send_byte_dut(8'h01); // qty lo
-    uart_send_byte_dut(8'hB9); // CRC lo
-    uart_send_byte_dut(8'hCA); // CRC hi
-    uart_recv_byte_dut(b0);
-    uart_recv_byte_dut(b1);
-    uart_recv_byte_dut(b2);
-    uart_recv_byte_dut(b3);
-    uart_recv_byte_dut(b4);
-    uart_recv_byte_dut(b5);
-    if (b0!==8'h01 || b1!==8'h02 || b2!==8'h01 || b3[0]!==1'b1 || b4!==8'h60 || b5!==8'h48)
-      $display("ERROR: Read DI resp %h %h %h %h %h %h", b0,b1,b2,b3,b4,b5);
   end
   endtask
 

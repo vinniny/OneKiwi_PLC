@@ -69,69 +69,81 @@ module uart_bridge #(
     end
   end
 
-  // RTU silence detector
-  // char_bits ≈ 10 + parity + stop2
-  // Cast parity/stop flags to 4 bits to avoid width expansion warnings
-  wire [3:0] char_bits = 4'd10 + (parity!=2'd0 ? 4'd1 : 4'd0) + (stop2 ? 4'd1 : 4'd0);
-  // Treat a zero configuration as 3.5 characters to avoid premature frame_end
-  wire [15:0] rtu_sil = (rtu_sil_q88 == 16'd0) ? 16'd896 : rtu_sil_q88;
-  reg  [23:0] sil_cnt;
-  reg         in_frame;
+  // --- RTU framing (replace previous RTU silence logic) ---
+
+  // Bits per character: 1 start + 8 data + 1 stop + optional parity + optional extra stop
+  wire [4:0] bits_per_char = 5'd10
+                             + (parity != 2'd0 ? 5'd1 : 5'd0)
+                             + (stop2 ? 5'd1 : 5'd0);
+
+  // Clocks per char = baud_div (per oversample tick) * OVERSAMPLE * bits_per_char
+  wire [31:0] clks_per_char = (baud_div * OVERSAMPLE) * bits_per_char;
+
+  // Clamp RTU silent interval to at least 3.5 chars (Q8.8 ~= 0x0380 = 896)
+  wire [15:0] rtu_sil_q88_min = (rtu_sil_q88 < 16'd896) ? 16'd896 : rtu_sil_q88;
+
+  // Convert Q8.8 chars → clocks
+  wire [31:0] silence_threshold_clks = ({16'd0, rtu_sil_q88_min} * clks_per_char) >> 8;
+
+  reg  [31:0] sil_cnt_clks;
+  reg         in_frame_rtu;
 
   always @(posedge clk) begin
     if (rst) begin
-      rx_data_o <= 8'h00;
-      rx_valid_o <= 1'b0;
-      frame_start <= 1'b0;
-      frame_end <= 1'b0;
+      rx_data_o     <= 8'h00;
+      rx_valid_o    <= 1'b0;
+      frame_start   <= 1'b0;
+      frame_end     <= 1'b0;
       frame_timeout <= 1'b0;
-      sil_cnt <= 24'd0;
-      in_frame <= 1'b0;
-      crc_err <= 1'b0;
-      lrc_err <= 1'b0;
-    end else begin
-      rx_valid_o <= 1'b0;
-      frame_start <= 1'b0;
-      frame_end <= 1'b0;
+      sil_cnt_clks  <= 32'd0;
+      in_frame_rtu  <= 1'b0;
+      crc_err       <= 1'b0;
+      lrc_err       <= 1'b0;
+    end else if (!ascii_en) begin
+      // -------- RTU path --------
+      rx_valid_o    <= 1'b0;
+      frame_start   <= 1'b0;
+      frame_end     <= 1'b0;
       frame_timeout <= 1'b0;
-
-      if (!ascii_en) begin
-        // RTU
-        if (rxv) begin
-          if (!in_frame) begin
-            in_frame <= 1'b1;
-            frame_start <= 1'b1;
-            sil_cnt <= 24'd0;
-          end
-          sil_cnt <= 24'd0;
-          rx_data_o <= rxd;
-          rx_valid_o <= 1'b1;
-        end else if (in_frame) begin
-          if (sil_cnt < ({rtu_sil,8'd0} * char_bits))
-            sil_cnt <= sil_cnt + {8'd0, baud_div};
-          else begin
-            in_frame <= 1'b0;
-            frame_end <= 1'b1;
-          end
+      if (rxv) begin
+        // Byte arrived
+        if (!in_frame_rtu) begin
+          in_frame_rtu <= 1'b1;
+          frame_start  <= 1'b1;
         end
-      end else begin
-        // ASCII: ':' start, CRLF end
-        if (rxv) begin
-          if (!in_frame) begin
-            if (rxd == 8'h3A) begin
-              in_frame <= 1'b1;
-              frame_start <= 1'b1;
-              rx_data_o <= rxd;
-              rx_valid_o <= 1'b1;
-            end
-          end else begin
-            rx_data_o <= rxd;
-            rx_valid_o <= 1'b1;
-            if (rxd == 8'h0A) begin
-              in_frame <= 1'b0;
-              frame_end <= 1'b1;
-            end // LF
+        sil_cnt_clks <= 32'd0;
+        rx_data_o    <= rxd;
+        rx_valid_o   <= 1'b1;
+      end else if (in_frame_rtu) begin
+        // Count silence while in-frame
+        if (sil_cnt_clks < silence_threshold_clks) begin
+          sil_cnt_clks <= sil_cnt_clks + 32'd1;
+        end else begin
+          in_frame_rtu <= 1'b0;
+          frame_end    <= 1'b1;
+        end
+      end
+    end else begin
+      // ASCII: ':' start, CRLF end
+      rx_valid_o    <= 1'b0;
+      frame_start   <= 1'b0;
+      frame_end     <= 1'b0;
+      frame_timeout <= 1'b0;
+      if (rxv) begin
+        if (!in_frame_rtu) begin
+          if (rxd == 8'h3A) begin
+            in_frame_rtu <= 1'b1;
+            frame_start  <= 1'b1;
+            rx_data_o    <= rxd;
+            rx_valid_o   <= 1'b1;
           end
+        end else begin
+          rx_data_o  <= rxd;
+          rx_valid_o <= 1'b1;
+          if (rxd == 8'h0A) begin
+            in_frame_rtu <= 1'b0;
+            frame_end    <= 1'b1;
+          end // LF
         end
       end
     end
