@@ -196,10 +196,9 @@ module modbus_controller #(
           rx_len <= 8'd0;
           if (frame_start) begin
             rx_in_ascii <= cfg_ascii_en;
-            // Capture first byte when frame begins
-            if (rx_b_v) begin
-              rx_buf[8'd0] <= rx_b;
-              rx_len       <= 8'd1;
+            if (rx_b_v && rx_len < 8'd255) begin
+              rx_buf[rx_len] <= rx_b;
+              rx_len         <= rx_len + 8'd1;
             end
             st <= S_COLLECT;
           end
@@ -208,10 +207,10 @@ module modbus_controller #(
         // =========================
         S_COLLECT: begin
           if (rx_b_v) begin
-            rx_buf[rx_len] <= rx_b;
-              if ({1'b0, rx_len} != BUF_MAX-1) begin
-                rx_len <= rx_len + 8'd1;
-              end
+            if (rx_len < 8'd255) begin
+              rx_buf[rx_len] <= rx_b;
+              rx_len         <= rx_len + 8'd1;
+            end
           end
           if (frame_end) begin
             st <= S_PARSE;
