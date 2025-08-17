@@ -156,6 +156,7 @@ module top_modbus_converter_tb;
   integer    bit_cycles, half_bit_cycles;
   integer    i;
   reg [7:0]  b0, b1, b2, b3, b4, b5, b6, b7;
+  reg [7:0]  tb_buf [0:255];
 
   // Main test sequence
   initial begin
@@ -182,6 +183,8 @@ module top_modbus_converter_tb;
 
     // Full system Modbus stimulus
     test_full_system_modbus();
+    test_ascii_modbus();
+    test_bad_crc();
 
     // Ensure no bus errors
     if (PSLVERR !== 1'b0) begin
@@ -320,6 +323,126 @@ module top_modbus_converter_tb;
       $display("ERROR: DO register bit0 not set");
     if (GPIO_DO[0] !== 1'b1)
       $display("ERROR: GPIO_DO not updated by Modbus write");
+  end
+  endtask
+
+  // ASCII helpers
+  function [7:0] hex_char;
+    input [3:0] nib;
+    begin
+      if (nib < 4'd10)
+        hex_char = "0" + nib[3:0];
+      else
+        hex_char = "A" + (nib[3:0] - 4'd10);
+    end
+  endfunction
+
+  task uart_send_hex_byte(input [7:0] data);
+  begin
+    uart_send_byte_dut(hex_char(data[7:4]));
+    uart_send_byte_dut(hex_char(data[3:0]));
+  end
+  endtask
+
+  task send_ascii_frame;
+    input integer n;
+    integer i; reg [7:0] lrc;
+    begin
+      lrc = 8'h00;
+      for (i=0; i<n; i=i+1) lrc = lrc + tb_buf[i];
+      lrc = (~lrc) + 8'h01;
+      uart_send_byte_dut(":");
+      for (i=0;i<n;i=i+1) uart_send_hex_byte(tb_buf[i]);
+      uart_send_hex_byte(lrc);
+      uart_send_byte_dut(8'h0D);
+      uart_send_byte_dut(8'h0A);
+    end
+  endtask
+
+  task test_ascii_modbus;
+  reg [7:0] exp[0:255];
+  reg [7:0] rx;
+  reg [7:0] lrc;
+  integer idx;
+  begin
+    // Enable ASCII mode
+    apb_write(12'h010, 32'h0000_0100);
+    apb_write(12'h000, 32'h0000_0000);
+    for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
+
+    // Build and send FC05 frame in ASCII
+    tb_buf[0]=8'h01; tb_buf[1]=8'h05; tb_buf[2]=8'h00; tb_buf[3]=8'h00; tb_buf[4]=8'hFF; tb_buf[5]=8'h00;
+    send_ascii_frame(6);
+
+    // Expected echo
+    lrc = 8'h00;
+    for (idx=0; idx<6; idx=idx+1) lrc = lrc + tb_buf[idx];
+    lrc = (~lrc) + 8'h01;
+    exp[0] = ":";
+    for (idx=0; idx<6; idx=idx+1) begin
+      exp[1+idx*2] = hex_char(tb_buf[idx][7:4]);
+      exp[2+idx*2] = hex_char(tb_buf[idx][3:0]);
+    end
+    exp[13] = hex_char(lrc[7:4]);
+    exp[14] = hex_char(lrc[3:0]);
+    exp[15] = 8'h0D;
+    exp[16] = 8'h0A;
+
+    wait (dbg_do_we);
+    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
+
+    for (idx=0; idx<17; idx=idx+1) begin
+      uart_recv_byte_dut(rx);
+      if (rx !== exp[idx]) begin
+        $display("ERROR: ASCII echo mismatch at %0d exp=%02x got=%02x", idx, exp[idx], rx);
+        $finish;
+      end
+    end
+
+    apb_read(12'h000, rddata);
+    if (rddata[0] !== 1'b1)
+      $display("ERROR: DO register bit0 not set (ASCII)");
+
+    // Return to RTU mode
+    apb_write(12'h010, 32'h0000_0000);
+  end
+  endtask
+
+  task test_bad_crc;
+  reg saw_we;
+  integer j;
+  begin
+    apb_write(12'h010, 32'h0000_0000);
+    apb_write(12'h000, 32'h0000_0000);
+    for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
+
+    // Frame with incorrect CRC
+    uart_send_byte_dut(8'h01);
+    uart_send_byte_dut(8'h05);
+    uart_send_byte_dut(8'h00);
+    uart_send_byte_dut(8'h00);
+    uart_send_byte_dut(8'hFF);
+    uart_send_byte_dut(8'h00);
+    uart_send_byte_dut(8'h8D); // corrupt CRC lo
+    uart_send_byte_dut(8'h3A); // CRC hi
+
+    saw_we = 1'b0;
+    for (j=0; j<bit_cycles*40; j=j+1) begin
+      @(posedge PCLK);
+      if (dbg_do_we) saw_we = 1'b1;
+      if (UART_TX == 1'b0) begin
+        $display("ERROR: unexpected TX on bad CRC");
+        $finish;
+      end
+    end
+    if (saw_we) begin
+      $display("ERROR: do_we asserted on bad CRC");
+      $finish;
+    end
+
+    apb_read(12'h000, rddata);
+    if (rddata[0] !== 1'b0)
+      $display("ERROR: DO register changed on bad CRC");
   end
   endtask
 

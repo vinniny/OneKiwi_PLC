@@ -34,7 +34,7 @@ module modbus_controller #(
   input  wire [31:0] di_status,
   output reg  [31:0] do_wdata,
   output reg  [31:0] do_wmask,
-  output reg         do_we,
+  output reg do_we /*verilator public_flat*/, 
 
   // Status (wired to CSR)
   output reg         stat_crc_err,
@@ -74,12 +74,12 @@ module modbus_controller #(
 
   // ===== RX buffer (per-frame) =====
   (* ram_style = "block" *) reg [7:0] rx_buf [0:BUF_MAX-1];
-  reg [7:0] rx_len;
+  reg [7:0] rx_len /*verilator public_flat*/;
   reg       rx_in_ascii;
 
   // ===== TX buffer (per-frame) =====
   (* ram_style = "block" *) reg [7:0] tx_buf [0:BUF_MAX-1];
-  reg [8:0] tx_len;
+  reg [8:0] tx_len /*verilator public_flat*/;
   reg [8:0] tx_idx;
 
   // ===== Shared temporaries =====
@@ -442,6 +442,16 @@ module modbus_controller #(
                 ofs = {16'd0, addr} - {16'd0, cfg_map_base_qw_iw};
                 reg_holding[ofs[5:0]] <= val;
 
+                // mirror first two holding registers into DO[15:0] and DO[31:16]
+                if (addr < 16'd2) begin
+                  shamt   = addr[0] ? 16 : 0;
+                  msk     = 32'hFFFF << shamt;
+                  new_do  = {16'h0000, val} << shamt;
+                  do_wmask <= msk;
+                  do_wdata <= new_do;
+                  do_we_d  <= 1'b1;
+                end
+
                 tx_wr   = 0;
                 for (j=0; j<6; j=j+1) begin
                   tx_buf[tx_wr[7:0]] = rx_buf[j];
@@ -520,12 +530,24 @@ module modbus_controller #(
 
               end else if (func==8'h10) begin
                 // write multiple holding regs: unpack words from rx_buf[7..]
+                new_do = 32'h0;
+                msk    = 32'h0;
                 for (i=0; i<REG_WORDS; i=i+1) begin
                   if (i < qty) begin
                       w = {rx_buf[7+i*2], rx_buf[8+i*2]};
                       ofs = {16'd0, addr} + i - {16'd0, cfg_map_base_qw_iw};
                       reg_holding[ofs[5:0]] <= w;
+                      if (({16'd0, addr} + i) < 2) begin
+                        shamt = ((({16'd0, addr} + i) & 32'd1) != 0) ? 16 : 0;
+                        msk   = msk | (32'hFFFF << shamt);
+                        new_do = new_do | ({16'h0000, w} << shamt);
+                      end
                   end
+                end
+                if (msk != 32'h0) begin
+                  do_wmask <= msk;
+                  do_wdata <= new_do;
+                  do_we_d  <= 1'b1;
                 end
 
                 // Response: echo addr func start qty
@@ -590,12 +612,13 @@ module modbus_controller #(
 
         // =========================
           S_SEND: begin
-            if (tx_b_rdy && (tx_idx < tx_len)) begin
-              tx_b   <= tx_buf[tx_idx[7:0]];
-              tx_b_v <= 1'b1;
-              tx_idx <= tx_idx + 9'd1;
-            end
-            if (tx_idx == tx_len) begin
+            if (tx_idx < tx_len) begin
+              if (tx_b_rdy) begin
+                tx_b   <= tx_buf[tx_idx[7:0]];
+                tx_b_v <= 1'b1;
+                tx_idx <= tx_idx + 9'd1;
+              end
+            end else begin
               st <= S_IDLE;
             end
           end
