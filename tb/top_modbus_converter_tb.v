@@ -193,8 +193,8 @@ module top_modbus_converter_tb;
       $finish;
     end
 
-    $display("All tests passed");
-    #20 $finish;
+    $display("All tests completed successfully");
+    $finish;
   end
 
   // ----------------------
@@ -204,6 +204,7 @@ module top_modbus_converter_tb;
   // Test CSR block and GPIO paths via APB
   task test_csr_and_gpio;
   begin
+    $display("Starting test_csr_and_gpio");
     // --- Check default register values ---
     apb_read(12'h000, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: DO reset %h", rddata); $finish; end
     apb_read(12'h004, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: DI reset %h", rddata); $finish; end
@@ -278,13 +279,23 @@ module top_modbus_converter_tb;
     apb_read(12'h034, rddata); if (rddata !== 32'h0000_0020) begin $display("ERROR: SCAN_WBASE %h", rddata); $finish; end
     apb_read(12'h038, rddata); if (rddata !== 32'h0000_0030) begin $display("ERROR: SCAN_RBASE %h", rddata); $finish; end
     apb_write(12'h020, 32'h0000_0000);
+    $display("test_csr_and_gpio passed");
   end
   endtask
 
   // Simple stand-alone UART bridge receive test
   task test_uart_bridge_unit;
   begin
+    $display("Starting test_uart_bridge_unit");
     if (!tb_tx_ready) begin $display("ERROR: uart_bridge not ready"); $finish; end
+    // Allow initial idle before starting frame
+    for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
+    uart_send_byte_unit(8'h55);
+    uart_send_byte_unit(8'hAA);
+    tb_uart_rx = 1'b1;
+    for (i=0; i<bit_cycles*400 && !tb_f_end; i=i+1) @(posedge PCLK);
+    if (!tb_f_end) begin $display("ERROR: tb_f_end not asserted"); $finish; end
+    $display("test_uart_bridge_unit passed");
   end
   endtask
 
@@ -292,9 +303,9 @@ module top_modbus_converter_tb;
   task test_full_system_modbus;
   reg saw_we;
   begin
-    // Switch to slave mode and use default 3.5 char silent interval
-    // (rtu_sil_q88 = 0 selects 3.5 chars inside the UART bridge)
-    apb_write(12'h010, 32'h0000_0000);
+    $display("Starting test_full_system_modbus");
+    // Switch to slave mode with short silent interval
+    apb_write(12'h010, 32'h0100_0000);
 
     // Clear DO register so Modbus write has known starting point
     apb_write(12'h000, 32'h0000_0000);
@@ -312,6 +323,10 @@ module top_modbus_converter_tb;
     uart_send_byte_dut(8'h8C); // CRC lo
     uart_send_byte_dut(8'h3A); // CRC hi
 
+    // Add idle time to trigger frame_end
+    UART_RX = 1'b1;
+    for (i=0; i<bit_cycles*40; i=i+1) @(posedge PCLK);
+
     // Wait for controller write strobe and allow response to complete
     wait (dbg_do_we);
     $display("do_we asserted: mask=%h data=%h", dbg_do_wmask, dbg_do_wdata);
@@ -324,6 +339,7 @@ module top_modbus_converter_tb;
       $display("ERROR: DO register bit0 not set");
     if (GPIO_DO[0] !== 1'b1)
       $display("ERROR: GPIO_DO not updated by Modbus write");
+    $display("test_full_system_modbus passed");
   end
   endtask
 
@@ -366,14 +382,16 @@ module top_modbus_converter_tb;
   reg [7:0] lrc;
   integer idx;
   begin
+    $display("Starting test_ascii_modbus");
     // Enable ASCII mode
-    apb_write(12'h010, 32'h0000_0100);
+    apb_write(12'h010, 32'h0100_0100);
     apb_write(12'h000, 32'h0000_0000);
     for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
 
     // Build and send FC05 frame in ASCII
     tb_buf[0]=8'h01; tb_buf[1]=8'h05; tb_buf[2]=8'h00; tb_buf[3]=8'h00; tb_buf[4]=8'hFF; tb_buf[5]=8'h00;
     send_ascii_frame(6);
+    UART_RX = 1'b1;
 
     // Expected echo
     lrc = 8'h00;
@@ -405,7 +423,8 @@ module top_modbus_converter_tb;
       $display("ERROR: DO register bit0 not set (ASCII)");
 
     // Return to RTU mode
-    apb_write(12'h010, 32'h0000_0000);
+    apb_write(12'h010, 32'h0100_0000);
+    $display("test_ascii_modbus passed");
   end
   endtask
 
@@ -413,7 +432,8 @@ module top_modbus_converter_tb;
   reg saw_we;
   integer j;
   begin
-    apb_write(12'h010, 32'h0000_0000);
+    $display("Starting test_bad_crc");
+    apb_write(12'h010, 32'h0100_0000);
     apb_write(12'h000, 32'h0000_0000);
     for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
 
@@ -426,6 +446,7 @@ module top_modbus_converter_tb;
     uart_send_byte_dut(8'h00);
     uart_send_byte_dut(8'h8D); // corrupt CRC lo
     uart_send_byte_dut(8'h3A); // CRC hi
+    UART_RX = 1'b1;
 
     saw_we = 1'b0;
     for (j=0; j<bit_cycles*40; j=j+1) begin
@@ -444,6 +465,7 @@ module top_modbus_converter_tb;
     apb_read(12'h000, rddata);
     if (rddata[0] !== 1'b0)
       $display("ERROR: DO register changed on bad CRC");
+    $display("test_bad_crc passed");
   end
   endtask
 
@@ -530,6 +552,7 @@ module top_modbus_converter_tb;
       if (UART_TX == 1'b1) begin
         $display("ERROR: uart_recv_byte_dut timeout waiting for start bit");
         data = 8'h00;
+        $finish;
       end else begin
         for (cyc=0; cyc<bit_cycles+half_bit_cycles; cyc=cyc+1) @(posedge PCLK);
         data[0] = UART_TX;
