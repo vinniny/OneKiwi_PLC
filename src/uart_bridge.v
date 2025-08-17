@@ -76,8 +76,8 @@ module uart_bridge #(
                              + (parity != 2'd0 ? 5'd1 : 5'd0)
                              + (stop2 ? 5'd1 : 5'd0);
 
-  // Clocks per char = baud_div (per oversample tick) * OVERSAMPLE * bits_per_char
-  wire [31:0] clks_per_char = (baud_div * OVERSAMPLE) * bits_per_char;
+  // Clocks per char = (baud_div + 1) * OVERSAMPLE * bits_per_char
+  wire [31:0] clks_per_char = ((baud_div + 16'd1) * OVERSAMPLE) * bits_per_char;
 
   // Clamp RTU silent interval to at least 1 char (Q8.8 = 0x0100 = 256)
   wire [15:0] rtu_sil_q88_min = (rtu_sil_q88 < 16'd256) ? 16'd256 : rtu_sil_q88;
