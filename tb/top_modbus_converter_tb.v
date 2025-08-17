@@ -212,8 +212,9 @@ module top_modbus_converter_tb;
     apb_read(12'h00C, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: MSG reset %h", rddata); $finish; end
     apb_read(12'h010, rddata); if (rddata !== 32'h0001_0000) begin $display("ERROR: CFG0 reset %h", rddata); $finish; end
     apb_read(12'h014, rddata); if (rddata !== 32'h0080_0036) begin $display("ERROR: CFG1 reset %h", rddata); $finish; end
-    bit_cycles      = rddata[15:0] * 16;
+    bit_cycles      = (rddata[15:0] + 1) * 16;  // Account for divider reload
     half_bit_cycles = bit_cycles / 2;
+    $display("Calculated bit_cycles: %0d (baud_div=%0d)", bit_cycles, rddata[15:0]);
     apb_read(12'h018, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: MAP reset %h", rddata); $finish; end
     apb_read(12'h01C, rddata); if (rddata !== 32'h0000_0002) begin $display("ERROR: IRQ reset %h", rddata); $finish; end
     apb_read(12'h020, rddata); if (rddata !== 32'h0001_0014) begin $display("ERROR: SCAN_CTRL reset %h", rddata); $finish; end
@@ -249,8 +250,9 @@ module top_modbus_converter_tb;
     apb_write(12'h014, 32'h0080_0036);
     apb_read(12'h010, rddata); if (rddata !== 32'h0000_0000) begin $display("ERROR: CFG0 mismatch %h", rddata); $finish; end
     apb_read(12'h014, rddata); if (rddata !== 32'h0080_0036) begin $display("ERROR: CFG1 mismatch %h", rddata); $finish; end
-    bit_cycles      = rddata[15:0] * 16;
+    bit_cycles      = (rddata[15:0] + 1) * 16;  // Match UART oversample rate
     half_bit_cycles = bit_cycles / 2;
+    $display("Updated bit_cycles: %0d (baud_div=%0d)", bit_cycles, rddata[15:0]);
 
     // --- MAP base register ---
     apb_write(12'h018, 32'h0000_0044);
@@ -288,13 +290,19 @@ module top_modbus_converter_tb;
   begin
     $display("Starting test_uart_bridge_unit");
     if (!tb_tx_ready) begin $display("ERROR: uart_bridge not ready"); $finish; end
+    $display("Sending test bytes with bit_cycles=%0d", bit_cycles);
     // Allow initial idle before starting frame
     for (i=0; i<bit_cycles*5; i=i+1) @(posedge PCLK);
     uart_send_byte_unit(8'h55);
     uart_send_byte_unit(8'hAA);
+    $display("Bytes sent; waiting for frame end");
     tb_uart_rx = 1'b1;
-    for (i=0; i<bit_cycles*400 && !tb_f_end; i=i+1) @(posedge PCLK);
-    if (!tb_f_end) begin $display("ERROR: tb_f_end not asserted"); $finish; end
+    i = 0;
+    while (i < bit_cycles*400 && !tb_f_end) begin
+      @(posedge PCLK); i = i + 1;
+    end
+    if (!tb_f_end) begin $display("ERROR: tb_f_end not asserted after %0d clocks", i); $finish; end
+    $display("tb_f_end asserted after %0d idle clocks", i);
     $display("test_uart_bridge_unit passed");
   end
   endtask
