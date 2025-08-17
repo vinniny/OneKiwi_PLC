@@ -161,6 +161,73 @@ module modbus_controller #(
     end
   endfunction
 
+  // Convert nibble to ASCII hex
+  function [7:0] nib2hex;
+    input [3:0] n;
+    begin
+      nib2hex = (n < 10) ? ("0" + n[3:0]) : ("A" + (n[3:0]-4'd10));
+    end
+  endfunction
+
+  // Compute 8-bit LRC over tx_buf[0..(len-1)]
+  function [7:0] lrc8;
+    input integer len;
+    integer i;
+    reg [7:0] s;
+    begin
+      s = 8'h00;
+      for (i=0;i<len;i=i+1) s = s + tx_buf[i[7:0]];
+      lrc8 = (~s) + 8'h01;
+    end
+  endfunction
+
+  // Append CRC16 (Modbus RTU) to tx_buf in-place
+  task append_crc16_to_tx;
+    integer j,k;
+    reg [15:0] c,x;
+    begin
+      c = 16'hFFFF;
+      for (j=0;j<tx_len;j=j+1) begin
+        x = c ^ {8'h00, tx_buf[j[7:0]]};
+        for (k=0;k<8;k=k+1)
+          x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
+        c = x;
+      end
+      tx_buf[tx_len[8:0]] = c[7:0];   tx_len = tx_len + 9'd1;
+      tx_buf[tx_len[8:0]] = c[15:8];  tx_len = tx_len + 9'd1;
+    end
+  endtask
+
+  // Re-encode binary tx_buf[0..tx_len-1] into ASCII frame ":..LRC\r\n"
+  task ascii_wrap_tx_inplace;
+    integer src, dst, i;
+    reg [7:0] lrc, b;
+    // use a scratch local buffer to avoid overlap (re-use rx_buf as scratch)
+    begin
+      // compute LRC on current binary payload
+      lrc = lrc8(tx_len);
+
+      // copy to rx_buf as ASCII (safe scratch)
+      dst = 0;
+      rx_buf[dst] = ":"; dst = dst + 1;
+      for (src=0; src<tx_len; src=src+1) begin
+        b = tx_buf[src[7:0]];
+        rx_buf[dst] = nib2hex(b[7:4]); dst = dst + 1;
+        rx_buf[dst] = nib2hex(b[3:0]); dst = dst + 1;
+      end
+      // LRC (2 hex)
+      rx_buf[dst] = nib2hex(lrc[7:4]); dst = dst + 1;
+      rx_buf[dst] = nib2hex(lrc[3:0]); dst = dst + 1;
+      // CRLF
+      rx_buf[dst] = 8'h0D; dst = dst + 1;
+      rx_buf[dst] = 8'h0A; dst = dst + 1;
+
+      // move back into tx_buf
+      for (i=0;i<dst;i=i+1) tx_buf[i[7:0]] = rx_buf[i[7:0]];
+      tx_len = dst[8:0];
+    end
+  endtask
+
   // ===== Main sequential block =====
   /* verilator lint_off BLKSEQ */
   always @(posedge clk) begin
@@ -168,7 +235,7 @@ module modbus_controller #(
       st <= S_IDLE;
       rx_len <= 8'd0;
       tx_idx <= 9'd0;
-      tx_len <= 9'd0;
+      tx_len = 9'd0;
       tx_b_v <= 1'b0;
 
       do_we    <= 1'b0;
@@ -338,27 +405,12 @@ module modbus_controller #(
                   end
                 end
 
-                // CRC
-                c = 16'hFFFF;
-                for (j=0; j<BUF_MAX; j=j+1) begin
-                  if (j < tx_wr) begin
-                    // Extend byte to 16 bits for XOR to avoid width mismatch
-                    x = c ^ {8'h00, tx_buf[j]};
-                    for (k=0; k<8; k=k+1) begin
-                      if (x[0])
-                        x = (x>>1) ^ 16'hA001;
-                      else
-                        x = (x>>1);
-                    end
-                    c = x;
-                  end
+                tx_len = tx_wr[8:0];
+                if (rx_in_ascii) begin
+                  ascii_wrap_tx_inplace();
+                end else begin
+                  append_crc16_to_tx();
                 end
-                tx_buf[tx_wr[7:0]] = c[7:0];
-                tx_wr = tx_wr + 1;
-                tx_buf[tx_wr[7:0]] = c[15:8];
-                tx_wr = tx_wr + 1;
-
-                tx_len <= tx_wr[8:0];
                 st <= S_SEND;
                 tx_idx <= 9'd0;
 
@@ -387,23 +439,12 @@ module modbus_controller #(
                   end
                 end
 
-                // CRC
-                c = 16'hFFFF;
-                for (j=0; j<BUF_MAX; j=j+1) begin
-                  if (j < tx_wr) begin
-                    // Extend byte to 16 bits for XOR to avoid width mismatch
-                    x = c ^ {8'h00, tx_buf[j]};
-                    for (k=0; k<8; k=k+1)
-                      x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
-                    c = x;
-                  end
+                tx_len = tx_wr[8:0];
+                if (rx_in_ascii) begin
+                  ascii_wrap_tx_inplace();
+                end else begin
+                  append_crc16_to_tx();
                 end
-                tx_buf[tx_wr[7:0]] = c[7:0];
-                tx_wr = tx_wr + 1;
-                tx_buf[tx_wr[7:0]] = c[15:8];
-                tx_wr = tx_wr + 1;
-
-                tx_len <= tx_wr[8:0];
                 st <= S_SEND;
                 tx_idx <= 9'd0;
 
@@ -419,21 +460,12 @@ module modbus_controller #(
                   tx_wr = tx_wr + 1;
                 end
 
-                c = 16'hFFFF;
-                for (j=0; j<BUF_MAX; j=j+1) begin
-                  if (j < tx_wr) begin
-                    x = c ^ {8'h00, tx_buf[j]};
-                    for (k=0; k<8; k=k+1)
-                      x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
-                    c = x;
-                  end
+                tx_len = tx_wr[8:0];
+                if (rx_in_ascii) begin
+                  ascii_wrap_tx_inplace();
+                end else begin
+                  append_crc16_to_tx();
                 end
-                tx_buf[tx_wr[7:0]] = c[7:0];
-                tx_wr = tx_wr + 1;
-                tx_buf[tx_wr[7:0]] = c[15:8];
-                tx_wr = tx_wr + 1;
-
-                tx_len <= tx_wr[8:0];
                 st <= S_SEND;
                 tx_idx <= 9'd0;
 
@@ -458,21 +490,12 @@ module modbus_controller #(
                   tx_wr = tx_wr + 1;
                 end
 
-                c = 16'hFFFF;
-                for (j=0; j<BUF_MAX; j=j+1) begin
-                  if (j < tx_wr) begin
-                    x = c ^ {8'h00, tx_buf[j]};
-                    for (k=0; k<8; k=k+1)
-                      x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
-                    c = x;
-                  end
+                tx_len = tx_wr[8:0];
+                if (rx_in_ascii) begin
+                  ascii_wrap_tx_inplace();
+                end else begin
+                  append_crc16_to_tx();
                 end
-                tx_buf[tx_wr[7:0]] = c[7:0];
-                tx_wr = tx_wr + 1;
-                tx_buf[tx_wr[7:0]] = c[15:8];
-                tx_wr = tx_wr + 1;
-
-                tx_len <= tx_wr[8:0];
                 st <= S_SEND;
                 tx_idx <= 9'd0;
 
@@ -510,21 +533,12 @@ module modbus_controller #(
                 tx_buf[tx_wr[7:0]] = rx_buf[5];
                 tx_wr = tx_wr + 1;
 
-                c = 16'hFFFF;
-                for (j=0; j<BUF_MAX; j=j+1) begin
-                  if (j < tx_wr) begin
-                    x = c ^ {8'h00, tx_buf[j]};
-                    for (k=0; k<8; k=k+1)
-                      x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
-                    c = x;
-                  end
+                tx_len = tx_wr[8:0];
+                if (rx_in_ascii) begin
+                  ascii_wrap_tx_inplace();
+                end else begin
+                  append_crc16_to_tx();
                 end
-                tx_buf[tx_wr[7:0]] = c[7:0];
-                tx_wr = tx_wr + 1;
-                tx_buf[tx_wr[7:0]] = c[15:8];
-                tx_wr = tx_wr + 1;
-
-                tx_len <= tx_wr[8:0];
                 st <= S_SEND;
                 tx_idx <= 9'd0;
 
@@ -565,21 +579,12 @@ module modbus_controller #(
                 tx_buf[tx_wr[7:0]] = rx_buf[5];
                 tx_wr = tx_wr + 1;
 
-                c = 16'hFFFF;
-                for (j=0; j<BUF_MAX; j=j+1) begin
-                  if (j < tx_wr) begin
-                    x = c ^ {8'h00, tx_buf[j]};
-                    for (k=0; k<8; k=k+1)
-                      x = x[0] ? ((x>>1)^16'hA001) : (x>>1);
-                    c = x;
-                  end
+                tx_len = tx_wr[8:0];
+                if (rx_in_ascii) begin
+                  ascii_wrap_tx_inplace();
+                end else begin
+                  append_crc16_to_tx();
                 end
-                tx_buf[tx_wr[7:0]] = c[7:0];
-                tx_wr = tx_wr + 1;
-                tx_buf[tx_wr[7:0]] = c[15:8];
-                tx_wr = tx_wr + 1;
-
-                tx_len <= tx_wr[8:0];
                 st <= S_SEND;
                 tx_idx <= 9'd0;
 

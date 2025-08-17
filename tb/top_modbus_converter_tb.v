@@ -136,7 +136,8 @@ module top_modbus_converter_tb;
     .parity(2'd0),
     .stop2(1'b0),
     .ascii_en(1'b0),
-    .rtu_sil_q88(16'd1),
+    // use 3.5 character clamp for standalone test
+    .rtu_sil_q88(16'd0),
     .uart_rx_i(tb_uart_rx),
     .uart_tx_o(tb_uart_tx),
     .tx_data_i(8'h00),
