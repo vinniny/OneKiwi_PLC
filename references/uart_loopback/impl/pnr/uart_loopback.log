@@ -1,0 +1,26 @@
+Reading netlist file: "H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\impl\gwsynthesis\uart_loopback.vg"
+Parsing netlist file "H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\impl\gwsynthesis\uart_loopback.vg" completed
+Processing netlist completed
+Reading constraint file: "H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\src\uart_loopback.cst"
+Physical Constraint parsed completed
+Running placement......
+[10%] Placement Phase 0 completed
+[20%] Placement Phase 1 completed
+[30%] Placement Phase 2 completed
+[50%] Placement Phase 3 completed
+Running routing......
+[60%] Routing Phase 0 completed
+[70%] Routing Phase 1 completed
+[80%] Routing Phase 2 completed
+[90%] Routing Phase 3 completed
+Running timing analysis......
+[95%] Timing analysis completed
+Placement and routing completed
+Bitstream generation in progress......
+Bitstream generation completed
+Generate file "H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\impl\pnr\uart_loopback.pin.html" completed
+Generate file "H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\impl\pnr\uart_loopback.rpt.html" completed
+Generate file "H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\impl\pnr\uart_loopback.rpt.txt" completed
+Generate file "H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\impl\pnr\uart_loopback.tr.html" completed
+Mon Apr 15 13:38:51 2024
+

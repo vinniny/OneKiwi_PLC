@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module name="uart_loopback">
+    <SubModule name="gw_gao_inst_0" Register="360" Alu="10" Lut="387" Bsram="4"/>
+    <SubModule name="uart_data_rx" Register="89" Lut="83">
+        <SubModule name="uart_byte_rx" Register="38" Lut="44"/>
+    </SubModule>
+    <SubModule name="uart_data_tx" Register="50" Lut="52">
+        <SubModule name="uart_byte_tx" Register="34" Lut="52"/>
+    </SubModule>
+</Module>

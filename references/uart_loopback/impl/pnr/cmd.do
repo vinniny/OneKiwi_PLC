@@ -1,0 +1,14 @@
+-d H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\impl\gwsynthesis\uart_loopback.vg
+-p GW5A-25A-UBGA324-1
+-pn GW5A-LV25UG324ES
+-cst H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\src\uart_loopback.cst
+-cfg H:\01_gaoyun\01_gao_project\09_uart_loopback\uart_loopback\impl\pnr\device.cfg
+-gao_crc 1111110011110011
+-bit
+-tr
+-ph
+-timing
+-cst_error
+-correct_hold 1
+-route_maxfan 23
+-rtl_gao

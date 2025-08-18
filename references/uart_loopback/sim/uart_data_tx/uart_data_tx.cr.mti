@@ -1,0 +1,22 @@
+H:/01_gaoyun/gao_project/09_uart_loopback/uart_loopback/src/uart_data_tx.v {1 {vlog -work work -vopt -stats=none H:/01_gaoyun/gao_project/09_uart_loopback/uart_loopback/src/uart_data_tx.v
+Model Technology ModelSim SE-64 vlog 10.7 Compiler 2017.12 Dec  7 2017
+-- Compiling module uart_data_tx
+
+Top level modules:
+	uart_data_tx
+
+} {} {}} H:/01_gaoyun/gao_project/09_uart_loopback/uart_loopback/src/uart_byte_tx.v {1 {vlog -work work -vopt -stats=none H:/01_gaoyun/gao_project/09_uart_loopback/uart_loopback/src/uart_byte_tx.v
+Model Technology ModelSim SE-64 vlog 10.7 Compiler 2017.12 Dec  7 2017
+-- Compiling module uart_byte_tx
+
+Top level modules:
+	uart_byte_tx
+
+} {} {}} H:/01_gaoyun/gao_project/09_uart_loopback/uart_loopback/src/tb/uart_data_tx_tb.v {1 {vlog -work work -vopt -stats=none H:/01_gaoyun/gao_project/09_uart_loopback/uart_loopback/src/tb/uart_data_tx_tb.v
+Model Technology ModelSim SE-64 vlog 10.7 Compiler 2017.12 Dec  7 2017
+-- Compiling module uart_data_tx_tb
+
+Top level modules:
+	uart_data_tx_tb
+
+} {} {}}

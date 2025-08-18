@@ -1,0 +1,33 @@
+{
+ "Device" : "GW5A-25A",
+ "Files" : [
+  {
+   "Path" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_byte_rx.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_byte_tx.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_data_rx.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_data_tx.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_loopback.v",
+   "Type" : "verilog"
+  }
+ ],
+ "IncludePath" : [
+
+ ],
+ "LoopLimit" : 2000,
+ "ResultFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/impl/temp/rtl_parser.result",
+ "Top" : "uart_loopback",
+ "VerilogStd" : "verilog_2001",
+ "VhdlStd" : "vhdl_93"
+}

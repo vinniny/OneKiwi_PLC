@@ -1,0 +1,48 @@
+[
+ {
+  "InstFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_loopback.v",
+  "InstLine" : 1,
+  "InstName" : "uart_loopback",
+  "ModuleFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_loopback.v",
+  "ModuleLine" : 1,
+  "ModuleName" : "uart_loopback",
+  "SubInsts" : [
+   {
+    "InstFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_loopback.v",
+    "InstLine" : 30,
+    "InstName" : "uart_data_rx",
+    "ModuleFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_data_rx.v",
+    "ModuleLine" : 41,
+    "ModuleName" : "uart_data_rx",
+    "SubInsts" : [
+     {
+      "InstFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_data_rx.v",
+      "InstLine" : 72,
+      "InstName" : "uart_byte_rx",
+      "ModuleFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_byte_rx.v",
+      "ModuleLine" : 3,
+      "ModuleName" : "uart_byte_rx"
+     }
+    ]
+   },
+   {
+    "InstFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_loopback.v",
+    "InstLine" : 46,
+    "InstName" : "uart_data_tx",
+    "ModuleFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_data_tx.v",
+    "ModuleLine" : 42,
+    "ModuleName" : "uart_data_tx",
+    "SubInsts" : [
+     {
+      "InstFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_data_tx.v",
+      "InstLine" : 74,
+      "InstName" : "uart_byte_tx",
+      "ModuleFile" : "H:/01_gaoyun/01_gao_project/09_uart_loopback/uart_loopback/src/uart_byte_tx.v",
+      "ModuleLine" : 20,
+      "ModuleName" : "uart_byte_tx"
+     }
+    ]
+   }
+  ]
+ }
+]
